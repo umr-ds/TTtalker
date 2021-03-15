@@ -1,0 +1,2 @@
+IADD:00000000:/flash.bin
+IDSET:/flash.bin:a00ebcad757665634773874
