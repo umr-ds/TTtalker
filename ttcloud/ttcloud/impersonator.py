@@ -1,14 +1,14 @@
 #! /usr/bin/env python3
 
 from socket import socket, AF_INET, SOCK_DGRAM
-from ttcloud.packages import unmarshall
+from ttcloud.packets import unmarshall
 
 
 def listen_and_process(s: socket) -> None:
     packet: bytes
     while 1:
         packet, _ = s.recvfrom(4096)
-        packages.unmarshall(packet)
+        unmarshall(packet)
 
 
 if __name__ == "__main__":
@@ -17,3 +17,6 @@ if __name__ == "__main__":
     )
     parsed = unmarshall(test_packet)
     print(parsed)
+    marshalled = parsed.marshall()
+
+    assert marshalled == test_packet
