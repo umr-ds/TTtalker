@@ -12,9 +12,7 @@ def listen_and_process(s: socket) -> None:
 
 
 if __name__ == "__main__":
-    test_packet: bytes = bytes.fromhex(
-        "180103c2520103524d020d010000328800008c88000071b5000013aa0000111dd4004a00eafc940f0000000000007787000074570000fcc5bd430100"
-    )
+    test_packet: bytes = bytes.fromhex("4a4a4a4a520103520502")
     parsed = unmarshall(test_packet)
     print(parsed)
     marshalled = parsed.marshall()
