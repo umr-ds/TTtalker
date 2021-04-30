@@ -32,7 +32,7 @@ class TTPacket:
 
 
 @dataclass
-class HELOPacket(TTPacket):
+class TTHeloPacket(TTPacket):
     packet_number: int
 
     def packet_type(self) -> str:
@@ -41,7 +41,7 @@ class HELOPacket(TTPacket):
     @classmethod
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
-    ) -> HELOPacket:
+    ) -> TTHeloPacket:
         packet_number: int = unpack("!B", raw_stream.read(1))[0]
         return cls(
             receiver_address=receiver_address,
@@ -60,7 +60,40 @@ class HELOPacket(TTPacket):
 
 
 @dataclass
-class DATAPacket(TTPacket):
+class TTCloudHeloPacket(TTPacket):
+    command: int
+    time: int
+
+    def packet_type(self) -> str:
+        return "TTCloudHELO"
+
+    @classmethod
+    def unmarshall(
+        cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
+    ) -> TTCloudHeloPacket:
+        command: int
+        cloud_time: int
+        command, cloud_time = unpack("!BI", raw_stream.read(5))
+        return cls(
+            receiver_address=receiver_address,
+            sender_address=sender_address,
+            command=command,
+            time=cloud_time,
+        )
+
+    def marshall(self) -> bytes:
+        return pack(
+            "!IIBBI",
+            self.receiver_address.address,
+            self.sender_address.address,
+            65,
+            self.command,
+            self.time,
+        )
+
+
+@dataclass
+class DataPacket(TTPacket):
     packet_number: int
     time: int
     growth_sensor: int
@@ -85,7 +118,7 @@ class DATAPacket(TTPacket):
     @classmethod
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
-    ) -> DATAPacket:
+    ) -> DataPacket:
         fields = unpack("!BIIIIIBBhhhhhhhIIHI", raw_stream.read(51))
         packet_number: int = fields[0]
         time: int = fields[1]
@@ -160,8 +193,9 @@ class DATAPacket(TTPacket):
 
 
 PACKET_TYPES: Dict[int, Callable[[TTAddress, TTAddress, BytesIO], TTPacket]] = {
-    5: HELOPacket.unmarshall,
-    77: DATAPacket.unmarshall,
+    5: TTHeloPacket.unmarshall,
+    65: TTCloudHeloPacket.unmarshall,
+    77: DataPacket.unmarshall,
 }
 
 
