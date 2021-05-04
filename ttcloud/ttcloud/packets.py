@@ -12,6 +12,12 @@ class TTAddress:
     def __str__(self) -> str:
         return hex(self.address)
 
+    def __eq__(self, other) -> bool:
+        return isinstance(other, TTAddress) and (self.address == other.address)
+
+    def __hash__(self) -> int:
+        return self.address.__hash__()
+
 
 @dataclass
 class TTPacket:
@@ -34,6 +40,9 @@ class TTPacket:
 @dataclass
 class TTHeloPacket(TTPacket):
     packet_number: int
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, TTHeloPacket) and self.__dict__ == other.__dict__
 
     def packet_type(self) -> str:
         return "HELO"
@@ -63,6 +72,9 @@ class TTHeloPacket(TTPacket):
 class TTCloudHeloPacket(TTPacket):
     command: int
     time: int
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, TTCloudHeloPacket) and self.__dict__ == other.__dict__
 
     def packet_type(self) -> str:
         return "TTCloudHELO"
@@ -111,6 +123,9 @@ class DataPacket(TTPacket):
     adc_volt_bat: int
     temperature_reference: Tuple[int, int]
     temperature_heat: Tuple[int, int]
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, DataPacket) and self.__dict__ == other.__dict__
 
     def packet_type(self) -> str:
         return "DATA"
