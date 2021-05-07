@@ -207,9 +207,55 @@ class DataPacket(TTPacket):
         )
 
 
+@dataclass
+class TTCommand1(TTPacket):
+    command: int
+    timestamp: int
+    sleep_intervall: int
+    unknown: Tuple[int, int, int]
+    heating: int
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, TTCommand1) and self.__dict__ == other.__dict__
+
+    def packet_type(self) -> str:
+        return "COMMAND"
+
+    @classmethod
+    def unmarshall(
+        cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
+    ) -> TTCommand1:
+        fields = unpack("!BIHHHBB", raw_stream.read(13))
+        return TTCommand1(
+            receiver_address=receiver_address,
+            sender_address=sender_address,
+            command=fields[0],
+            timestamp=fields[1],
+            sleep_intervall=fields[2],
+            heating=fields[4],
+            unknown=(fields[3], fields[5], fields[6]),
+        )
+
+    def marshall(self) -> bytes:
+        return pack(
+            "!IIBBIHHHBB",
+            self.receiver_address.address,
+            self.sender_address.address,
+            66,
+            self.command,
+            self.timestamp,
+            self.sleep_intervall,
+            self.unknown[0],
+            self.heating,
+            self.unknown[1],
+            self.unknown[2],
+        )
+
+
 PACKET_TYPES: Dict[int, Callable[[TTAddress, TTAddress, BytesIO], TTPacket]] = {
     5: TTHeloPacket.unmarshall,
     65: TTCloudHeloPacket.unmarshall,
+    66: TTCommand1.unmarshall,
     77: DataPacket.unmarshall,
 }
 
