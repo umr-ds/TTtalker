@@ -24,9 +24,6 @@ class TTPacket:
     receiver_address: TTAddress
     sender_address: TTAddress
 
-    def packet_type(self) -> str:
-        raise NotImplemented
-
     @classmethod
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
@@ -40,12 +37,10 @@ class TTPacket:
 @dataclass
 class TTHeloPacket(TTPacket):
     packet_number: int
+    packet_type: int = 5
 
     def __eq__(self, other) -> bool:
         return isinstance(other, TTHeloPacket) and self.__dict__ == other.__dict__
-
-    def packet_type(self) -> str:
-        return "HELO"
 
     @classmethod
     def unmarshall(
@@ -63,7 +58,7 @@ class TTHeloPacket(TTPacket):
             "!IIBB",
             self.receiver_address.address,
             self.sender_address.address,
-            5,
+            self.packet_type,
             self.packet_number,
         )
 
@@ -72,12 +67,10 @@ class TTHeloPacket(TTPacket):
 class TTCloudHeloPacket(TTPacket):
     command: int
     time: int
+    packet_type: int = 65
 
     def __eq__(self, other) -> bool:
         return isinstance(other, TTCloudHeloPacket) and self.__dict__ == other.__dict__
-
-    def packet_type(self) -> str:
-        return "TTCloudHELO"
 
     @classmethod
     def unmarshall(
@@ -98,7 +91,7 @@ class TTCloudHeloPacket(TTPacket):
             "!IIBBI",
             self.receiver_address.address,
             self.sender_address.address,
-            65,
+            self.packet_type,
             self.command,
             self.time,
         )
@@ -123,12 +116,10 @@ class DataPacket(TTPacket):
     adc_volt_bat: int
     temperature_reference: Tuple[int, int]
     temperature_heat: Tuple[int, int]
+    packet_type: int = 77
 
     def __eq__(self, other) -> bool:
         return isinstance(other, DataPacket) and self.__dict__ == other.__dict__
-
-    def packet_type(self) -> str:
-        return "DATA"
 
     @classmethod
     def unmarshall(
@@ -184,7 +175,7 @@ class DataPacket(TTPacket):
             "!IIBBIIIIIBBhhhhhhhIIHI",
             self.receiver_address.address,
             self.sender_address.address,
-            77,
+            self.packet_type,
             self.packet_number,
             self.time,
             self.temperature_reference[0],
@@ -214,12 +205,10 @@ class TTCommand1(TTPacket):
     sleep_intervall: int
     unknown: Tuple[int, int, int]
     heating: int
+    packet_type: int = 66
 
     def __eq__(self, other) -> bool:
         return isinstance(other, TTCommand1) and self.__dict__ == other.__dict__
-
-    def packet_type(self) -> str:
-        return "COMMAND"
 
     @classmethod
     def unmarshall(
@@ -241,7 +230,7 @@ class TTCommand1(TTPacket):
             "!IIBBIHHHBB",
             self.receiver_address.address,
             self.sender_address.address,
-            66,
+            self.packet_type,
             self.command,
             self.timestamp,
             self.sleep_intervall,
@@ -252,10 +241,49 @@ class TTCommand1(TTPacket):
         )
 
 
+@dataclass
+class TTCommand2(TTPacket):
+    command: int
+    timestamp: int
+    integration_time: int
+    gain: int
+    packet_type: int = 74
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, TTCommand2) and self.__dict__ == other.__dict__
+
+    @classmethod
+    def unmarshall(
+        cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
+    ) -> TTCommand2:
+        fields = unpack("!BIBB", raw_stream.read(7))
+        return TTCommand2(
+            receiver_address=receiver_address,
+            sender_address=sender_address,
+            command=fields[0],
+            timestamp=fields[1],
+            integration_time=fields[2],
+            gain=fields[3],
+        )
+
+    def marshall(self) -> bytes:
+        return pack(
+            "!IIBBIBB",
+            self.receiver_address.address,
+            self.sender_address.address,
+            self.packet_type,
+            self.command,
+            self.timestamp,
+            self.integration_time,
+            self.gain,
+        )
+
+
 PACKET_TYPES: Dict[int, Callable[[TTAddress, TTAddress, BytesIO], TTPacket]] = {
     5: TTHeloPacket.unmarshall,
     65: TTCloudHeloPacket.unmarshall,
     66: TTCommand1.unmarshall,
+    74: TTCommand2.unmarshall,
     77: DataPacket.unmarshall,
 }
 
