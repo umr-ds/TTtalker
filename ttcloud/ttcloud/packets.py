@@ -46,7 +46,7 @@ class TTHeloPacket(TTPacket):
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
     ) -> TTHeloPacket:
-        packet_number: int = unpack("!B", raw_stream.read(1))[0]
+        packet_number: int = unpack("=B", raw_stream.read(1))[0]
         return cls(
             receiver_address=receiver_address,
             sender_address=sender_address,
@@ -55,7 +55,7 @@ class TTHeloPacket(TTPacket):
 
     def marshall(self) -> bytes:
         return pack(
-            "!IIBB",
+            "=IIBB",
             self.receiver_address.address,
             self.sender_address.address,
             self.packet_type,
@@ -78,7 +78,7 @@ class TTCloudHeloPacket(TTPacket):
     ) -> TTCloudHeloPacket:
         command: int
         cloud_time: int
-        command, cloud_time = unpack("!BI", raw_stream.read(5))
+        command, cloud_time = unpack("=BI", raw_stream.read(5))
         return cls(
             receiver_address=receiver_address,
             sender_address=sender_address,
@@ -88,7 +88,7 @@ class TTCloudHeloPacket(TTPacket):
 
     def marshall(self) -> bytes:
         return pack(
-            "!IIBBI",
+            "=IIBBI",
             self.receiver_address.address,
             self.sender_address.address,
             self.packet_type,
@@ -125,7 +125,7 @@ class DataPacket(TTPacket):
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
     ) -> DataPacket:
-        fields = unpack("!BIIIIIBBhhhhhhhIIHI", raw_stream.read(51))
+        fields = unpack("=BIIIIIBBhhhhhhhIIHI", raw_stream.read(51))
         packet_number: int = fields[0]
         time: int = fields[1]
         t_ref_0: int = fields[2]
@@ -172,7 +172,7 @@ class DataPacket(TTPacket):
 
     def marshall(self) -> bytes:
         return pack(
-            "!IIBBIIIIIBBhhhhhhhIIHI",
+            "=IIBBIIIIIBBhhhhhhhIIHI",
             self.receiver_address.address,
             self.sender_address.address,
             self.packet_type,
@@ -214,7 +214,7 @@ class TTCommand1(TTPacket):
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
     ) -> TTCommand1:
-        fields = unpack("!BIHHHBB", raw_stream.read(13))
+        fields = unpack("=BIHHHBB", raw_stream.read(13))
         return TTCommand1(
             receiver_address=receiver_address,
             sender_address=sender_address,
@@ -227,7 +227,7 @@ class TTCommand1(TTPacket):
 
     def marshall(self) -> bytes:
         return pack(
-            "!IIBBIHHHBB",
+            "=IIBBIHHHBB",
             self.receiver_address.address,
             self.sender_address.address,
             self.packet_type,
@@ -256,7 +256,7 @@ class TTCommand2(TTPacket):
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
     ) -> TTCommand2:
-        fields = unpack("!BIBB", raw_stream.read(7))
+        fields = unpack("=BIBB", raw_stream.read(7))
         return TTCommand2(
             receiver_address=receiver_address,
             sender_address=sender_address,
@@ -268,7 +268,7 @@ class TTCommand2(TTPacket):
 
     def marshall(self) -> bytes:
         return pack(
-            "!IIBBIBB",
+            "=IIBBIBB",
             self.receiver_address.address,
             self.sender_address.address,
             self.packet_type,
@@ -294,7 +294,7 @@ def unmarshall(raw: bytes) -> TTPacket:
     sender: int
     packet_type: int
 
-    receiver, sender, packet_type = unpack("!IIB", raw_stream.read(9))
+    receiver, sender, packet_type = unpack("=IIB", raw_stream.read(9))
 
     receiver_address = TTAddress(receiver)
     sender_address: TTAddress = TTAddress(sender)
