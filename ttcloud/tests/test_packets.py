@@ -8,6 +8,9 @@ SAMPLE_RAW: List[bytes] = [
     bytes.fromhex(
         "180103c2520103524d014038000077850000fa8500006cb8000041aa0000111ee2003900ddfc920f000000000000788500000256000086c545430100"
     ),
+    bytes.fromhex(
+        "180103c252010352490240380000d10793414856da411448754256158f428151b34230d4b34245216742e5156842247e304244c42d42ea760f42d9e10b423203"
+    ),
     bytes.fromhex("52010352180103c242188cd84860100e000058022d02"),
     bytes.fromhex("52010352180103c24a5289e148603203"),
 ]
@@ -45,11 +48,35 @@ SAMPLE_PACKETS: List[TTPacket] = [
         StWC=50566,
         adc_volt_bat=82757,
     ),
+    LightSensorPacket(
+        receiver_address=TTAddress(3254976792),
+        sender_address=TTAddress(1375928658),
+        packet_number=2,
+        time=14400,
+        AS7263={
+            610: 18.378816604614258,
+            680: 27.292129516601562,
+            730: 61.32038879394531,
+            760: 71.54167175292969,
+            810: 89.65918731689453,
+            860: 89.9144287109375,
+        },
+        AS7262={
+            450: 57.78248977661133,
+            500: 58.02138137817383,
+            550: 44.12318420410156,
+            570: 43.44166564941406,
+            600: 35.866127014160156,
+            650: 34.97055435180664,
+        },
+        integration_time=50,
+        gain=3,
+    ),
     TTCommand1(
         receiver_address=TTAddress(1375928658),
         sender_address=TTAddress(3254976792),
         command=24,
-        timestamp=1615386764,
+        time=1615386764,
         sleep_intervall=3600,
         heating=600,
         unknown=(0, 45, 2),
@@ -58,7 +85,7 @@ SAMPLE_PACKETS: List[TTPacket] = [
         receiver_address=TTAddress(1375928658),
         sender_address=TTAddress(3254976792),
         command=82,
-        timestamp=1615389065,
+        time=1615389065,
         integration_time=50,
         gain=3,
     ),

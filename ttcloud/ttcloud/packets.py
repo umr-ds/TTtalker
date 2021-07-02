@@ -46,7 +46,7 @@ class TTHeloPacket(TTPacket):
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
     ) -> TTHeloPacket:
-        packet_number: int = unpack("=B", raw_stream.read(1))[0]
+        packet_number: int = unpack("=B", raw_stream.read())[0]
         return cls(
             receiver_address=receiver_address,
             sender_address=sender_address,
@@ -78,7 +78,7 @@ class TTCloudHeloPacket(TTPacket):
     ) -> TTCloudHeloPacket:
         command: int
         cloud_time: int
-        command, cloud_time = unpack("=BI", raw_stream.read(5))
+        command, cloud_time = unpack("=BI", raw_stream.read())
         return cls(
             receiver_address=receiver_address,
             sender_address=sender_address,
@@ -125,7 +125,7 @@ class DataPacket(TTPacket):
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
     ) -> DataPacket:
-        fields = unpack("=BIIIIIBBhhhhhhhIIHI", raw_stream.read(51))
+        fields = unpack("=BIIIIIBBhhhhhhhIIHI", raw_stream.read())
         packet_number: int = fields[0]
         time: int = fields[1]
         t_ref_0: int = fields[2]
@@ -199,9 +199,77 @@ class DataPacket(TTPacket):
 
 
 @dataclass
+class LightSensorPacket(TTPacket):
+    packet_number: int
+    time: int
+    AS7263: Dict[int, float]
+    AS7262: Dict[int, float]
+    integration_time: int
+    gain: int
+    packet_type: int = 73
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, LightSensorPacket) and self.__dict__ == other.__dict__
+
+    @classmethod
+    def unmarshall(
+        cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
+    ) -> LightSensorPacket:
+        fields = unpack("=BIffffffffffffBB", raw_stream.read())
+        return LightSensorPacket(
+            receiver_address=receiver_address,
+            sender_address=sender_address,
+            packet_number=fields[0],
+            time=fields[1],
+            AS7263={
+                610: fields[2],
+                680: fields[3],
+                730: fields[4],
+                760: fields[5],
+                810: fields[6],
+                860: fields[7],
+            },
+            AS7262={
+                450: fields[8],
+                500: fields[9],
+                550: fields[10],
+                570: fields[11],
+                600: fields[12],
+                650: fields[13],
+            },
+            integration_time=fields[14],
+            gain=fields[15],
+        )
+
+    def marshall(self) -> bytes:
+        return pack(
+            "=IIBBIffffffffffffBB",
+            self.receiver_address.address,
+            self.sender_address.address,
+            self.packet_type,
+            self.packet_number,
+            self.time,
+            self.AS7263[610],
+            self.AS7263[680],
+            self.AS7263[730],
+            self.AS7263[760],
+            self.AS7263[810],
+            self.AS7263[860],
+            self.AS7262[450],
+            self.AS7262[500],
+            self.AS7262[550],
+            self.AS7262[570],
+            self.AS7262[600],
+            self.AS7262[650],
+            self.integration_time,
+            self.gain,
+        )
+
+
+@dataclass
 class TTCommand1(TTPacket):
     command: int
-    timestamp: int
+    time: int
     sleep_intervall: int
     unknown: Tuple[int, int, int]
     heating: int
@@ -214,12 +282,12 @@ class TTCommand1(TTPacket):
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
     ) -> TTCommand1:
-        fields = unpack("=BIHHHBB", raw_stream.read(13))
+        fields = unpack("=BIHHHBB", raw_stream.read())
         return TTCommand1(
             receiver_address=receiver_address,
             sender_address=sender_address,
             command=fields[0],
-            timestamp=fields[1],
+            time=fields[1],
             sleep_intervall=fields[2],
             heating=fields[4],
             unknown=(fields[3], fields[5], fields[6]),
@@ -232,7 +300,7 @@ class TTCommand1(TTPacket):
             self.sender_address.address,
             self.packet_type,
             self.command,
-            self.timestamp,
+            self.time,
             self.sleep_intervall,
             self.unknown[0],
             self.heating,
@@ -244,7 +312,7 @@ class TTCommand1(TTPacket):
 @dataclass
 class TTCommand2(TTPacket):
     command: int
-    timestamp: int
+    time: int
     integration_time: int
     gain: int
     packet_type: int = 74
@@ -256,12 +324,12 @@ class TTCommand2(TTPacket):
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
     ) -> TTCommand2:
-        fields = unpack("=BIBB", raw_stream.read(7))
+        fields = unpack("=BIBB", raw_stream.read())
         return TTCommand2(
             receiver_address=receiver_address,
             sender_address=sender_address,
             command=fields[0],
-            timestamp=fields[1],
+            time=fields[1],
             integration_time=fields[2],
             gain=fields[3],
         )
@@ -273,7 +341,7 @@ class TTCommand2(TTPacket):
             self.sender_address.address,
             self.packet_type,
             self.command,
-            self.timestamp,
+            self.time,
             self.integration_time,
             self.gain,
         )
@@ -283,6 +351,7 @@ PACKET_TYPES: Dict[int, Callable[[TTAddress, TTAddress, BytesIO], TTPacket]] = {
     5: TTHeloPacket.unmarshall,
     65: TTCloudHeloPacket.unmarshall,
     66: TTCommand1.unmarshall,
+    73: LightSensorPacket.unmarshall,
     74: TTCommand2.unmarshall,
     77: DataPacket.unmarshall,
 }
