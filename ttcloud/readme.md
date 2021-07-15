@@ -13,5 +13,7 @@
   
 ## DRAGINO HARDWARE MODIFICATION
 https://github.com/dragino/Lora/blob/master/Lora_GPS%20HAT/v1.4/Lora%20GPS%20%20HAT%20for%20RPi%20v1.4.pdf
-* Lora CHIP DIO3 - Pin 11 -> GPIO21 (PIN 40) 
+* Lora CHIP DIO3 - Pin 11 -> GPIO5 (PIN 29) 
+* Lora CHIP DIO4 - Pin 12 -> GPIO6 (PIN 31)
+* Lora CHIP DIO5 - Pin 07 -> GPI26 (PIN 37)
 * PIN 22 & 24 Jumper (GPIO 25 -> 8)

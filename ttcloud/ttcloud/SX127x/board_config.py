@@ -36,7 +36,9 @@ class BOARD:
     DIO0 = 4    # RaspPi GPIO 4
     DIO1 = 23   # RaspPi GPIO 23
     DIO2 = 24   # RaspPi GPIO 24
-    DIO3 = 21   # RaspPi GPIO 21
+    DIO3 = 5   # RaspPi GPIO 5
+    DIO4 = 6   # RaspPi GPIO 6
+    DIO5 = 26   # RaspPi GPIO 26
     RST  = 17   # RaspPi GPIO 17
     SWITCH = 7  # RaspPi GPIO 4 connects to a switch
 
