@@ -1,1 +1,1 @@
-__all__ = ["impersonator", "packets"]
+__all__ = ["impersonator", "packets", "SX127x"]
