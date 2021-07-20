@@ -1,8 +1,9 @@
 #! /usr/bin/env python3
 import struct
 from socket import socket
-from packets import unmarshall
+from packets import unmarshall, TTPacket, TTHeloPacket, TTCloudHeloPacket
 import time
+from typing import List
 
 import time
 from SX127x.LoRa import *
@@ -48,16 +49,15 @@ class LoRaParser(LoRa):
         self.clear_irq_flags(RxDone=1)
         payload = self.read_payload(nocheck=True)[4:]
         print("Receive: ")
-        print(payload)
-        print(struct.pack("{}i".format(len(payload)), *payload))
-        print(bytes(payload))
         print(bytes(payload).hex())
-        unmarshall(bytes(payload))
+        packet: TTPacket = unmarshall(bytes(payload))
+        print(f"Packet type: {type(packet)}")
         time.sleep(2)  # Wait for the client be ready
-        print("Send: ACK")
-        self.write_payload([255, 255, 0, 0, 65, 67, 75, 0])  # Send ACK
-        self.set_mode(MODE.TX)
-        self.var = 1
+        self.handle_receive(packet)
+        #print("Send: ACK")
+        #self.write_payload([255, 255, 0, 0, 65, 67, 75, 0])  # Send ACK
+        #self.set_mode(MODE.TX)
+        #self.var = 1
 
     def on_tx_done(self):
         print("\nTxDone")
@@ -94,6 +94,15 @@ class LoRaParser(LoRa):
                 time.sleep(1)
 
             self.var = 0
+
+    def handle_receive(self, packet: TTPacket) -> None:
+        if isinstance(packet, TTHeloPacket):
+            reply = TTCloudHeloPacket(receiver_address=packet.sender_address, sender_address=packet.receiver_address, command=190, time=int(time.time()))
+            reply_bytes: List[int] = list(reply.marshall())
+            print(f"Reply: {reply_bytes}")
+            print("Sending reply")
+            self.write_payload([255, 255, 0, 0] + reply_bytes)
+            self.set_mode(MODE.TX)
 
 
 if __name__ == "__main__":
