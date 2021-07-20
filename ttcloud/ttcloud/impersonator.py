@@ -1,5 +1,5 @@
 #! /usr/bin/env python3
-
+import struct
 from socket import socket
 from packets import unmarshall
 import time

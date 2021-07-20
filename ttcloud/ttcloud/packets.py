@@ -354,6 +354,7 @@ PACKET_TYPES: Dict[int, Callable[[TTAddress, TTAddress, BytesIO], TTPacket]] = {
     73: LightSensorPacket.unmarshall,
     74: TTCommand2.unmarshall,
     77: DataPacket.unmarshall,
+    69: DataPacket.unmarshall,
 }
 
 
