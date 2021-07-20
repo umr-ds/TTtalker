@@ -12,33 +12,27 @@ from SX127x.board_config import BOARD
 BOARD.setup()
 BOARD.reset()
 
-def listen_and_process(s: socket) -> None:
-    packet: bytes
-    while 1:
-        packet, _ = s.recvfrom(4096)
-        unmarshall(packet)
 
 class LoRaParser(LoRa):
     def __init__(self, verbose=False):
         super(LoRaParser, self).__init__(verbose)
         self.set_mode(MODE.SLEEP)
         self.set_dio_mapping([0] * 6)
-        self.var=0
+        self.var = 0
 
         try:
             print("setting up...")
             self.set_freq(868.5)
-            self.set_coding_rate(CODING_RATE.CR4_6)
 
-            #Slow+long range  Bw = 125 kHz, Cr = 4/8, Sf = 4096chips/symbol, CRC on. 13 dBm
+            # Slow+long range  Bw = 125 kHz, Cr = 4/8, Sf = 4096chips/symbol, CRC on. 13 dBm
             self.set_pa_config(pa_select=1, max_power=21, output_power=15)
             self.set_bw(BW.BW125)
             self.set_coding_rate(CODING_RATE.CR4_8)
             self.set_spreading_factor(12)
             self.set_rx_crc(True)
-            #lora.set_lna_gain(GAIN.G1)
-            #lora.set_implicit_header_mode(False)
-            self.set_low_data_rate_optim(True) # evtl abschalten bei fehlern
+            # lora.set_lna_gain(GAIN.G1)
+            # lora.set_implicit_header_mode(False)
+            self.set_low_data_rate_optim(True)
             self.set_mode(MODE.STDBY)
 
             print("starting....")
@@ -48,16 +42,20 @@ class LoRaParser(LoRa):
         finally:
             print("Exit")
             self.set_mode(MODE.SLEEP)
-            BOARD.teardown() # !!!
+            BOARD.teardown()  # !!!
 
     def on_rx_done(self):
         self.clear_irq_flags(RxDone=1)
-        payload = self.read_payload(nocheck=True)
+        payload = self.read_payload(nocheck=True)[4:]
         print("Receive: ")
+        print(payload)
+        print(struct.pack("{}i".format(len(payload)), *payload))
+        print(bytes(payload))
+        print(bytes(payload).hex())
         unmarshall(bytes(payload))
-        time.sleep(2) # Wait for the client be ready
-        print ("Send: ACK")
-        self.write_payload([255, 255, 0, 0, 65, 67, 75, 0]) # Send ACK
+        time.sleep(2)  # Wait for the client be ready
+        print("Send: ACK")
+        self.write_payload([255, 255, 0, 0, 65, 67, 75, 0])  # Send ACK
         self.set_mode(MODE.TX)
         self.var = 1
 
@@ -89,16 +87,23 @@ class LoRaParser(LoRa):
         while True:
             self.reset_ptr_rx()
             self.set_mode(MODE.RXCONT)
+            x = 1
             while(self.var == 0):
-                print("sleeping because nothing happend")
+                x += 1
+                #print(f"{x}: sleeping because nothing happend")
                 time.sleep(1)
 
-            self.var=0
+            self.var = 0
+
 
 if __name__ == "__main__":
     test_packet: bytes = bytes.fromhex(
-        "180103c2520103524d020d010000328800008c88000071b5000013aa0000111dd4004a00eafc940f0000000000007787000074570000fcc5bd430100"
+        "180103c2630799210500"
+#        "180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"
+#        "180103c2520103524d020d010000328800008c88000071b5000013aa0000111dd4004a00eafc940f0000000000007787000074570000fcc5bd430100"
     )
+    print(test_packet.hex())
+    print(len("180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"))
     parsed = unmarshall(test_packet)
     print(parsed)
     marshalled = parsed.marshall()
