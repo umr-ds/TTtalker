@@ -51,12 +51,14 @@ class LoRaParser(LoRa):
         print(f"RAW Receive: {bytes(payload).hex()}")
         packet: TTPacket = unmarshall(bytes(payload))
         print(f"Parsed Receive: {packet}")
-        time.sleep(1)  # Wait for the client be ready
         self.handle_receive(packet)
 
     def on_tx_done(self):
-        print("\nTxDone")
-        print(self.get_irq_flags())
+        print("Sending Done - back to receiver mode")
+        self.set_dio_mapping([0,0,0,0,0,0]) # Deaktiviere alle DIOs
+        self.reset_ptr_rx()
+        self.set_mode(MODE.RXCONT) # Receiver mode
+        #print(self.get_irq_flags())
 
     def on_cad_done(self):
         print("\non_CadDone")
@@ -79,20 +81,17 @@ class LoRaParser(LoRa):
         print(self.get_irq_flags())
 
     def start(self):
-        while True:
-            self.reset_ptr_rx()
-            self.set_mode(MODE.RXCONT)
-            x = 1
-            while(self.var == 0):
-                x += 1
-                #print(f"{x}: sleeping because nothing happend")
-                time.sleep(1)
+        self.reset_ptr_rx()
+        self.set_mode(MODE.RXCONT)
 
-            self.var = 0
+        while True:
+            #print(f"{x}: sleeping because nothing happend")
+            time.sleep(0.5)
 
     def send_packet(self, packet: TTPacket) -> None:
         self.write_payload([255, 255, 0, 0] + list(packet.marshall()))
         print(f"Sending Reply: {packet}")
+        self.set_dio_mapping([1,0,0,0,0,0]) # Aktiviere DIO0 für TXDone trigger
         self.set_mode(MODE.TX)
 
     def handle_receive(self, packet: TTPacket) -> None:
