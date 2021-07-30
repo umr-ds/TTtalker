@@ -346,15 +346,26 @@ class TTCommand2(TTPacket):
             self.gain,
         )
 
+# TODO: Parse packet type 69
+@dataclass
+class TTDummy(TTPacket):
+    @classmethod
+    def unmarshall(
+            cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
+    ) -> TTDummy:
+        return TTDummy(receiver_address=receiver_address, sender_address=sender_address)
+
+    def marshall(self) -> bytes:
+        return b''
 
 PACKET_TYPES: Dict[int, Callable[[TTAddress, TTAddress, BytesIO], TTPacket]] = {
     5: TTHeloPacket.unmarshall,
     65: TTCloudHeloPacket.unmarshall,
     66: TTCommand1.unmarshall,
+    69: TTDummy.unmarshall,
     73: LightSensorPacket.unmarshall,
     74: TTCommand2.unmarshall,
     77: DataPacket.unmarshall,
-    69: DataPacket.unmarshall,
 }
 
 

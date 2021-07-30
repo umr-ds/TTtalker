@@ -95,11 +95,14 @@ class LoRaParser(LoRa):
 
             self.var = 0
 
+    def send_packet(self, packet: TTPacket) -> None:
+        self.write_payload([255, 255, 0, 0] + list(packet.marshall()))
+        self.set_mode(MODE.TX)
+
     def handle_receive(self, packet: TTPacket) -> None:
         if isinstance(packet, TTHeloPacket):
             reply = TTCloudHeloPacket(receiver_address=packet.sender_address, sender_address=packet.receiver_address, command=190, time=int(time.time()))
-            reply_bytes: List[int] = list(reply.marshall())
-            print(f"Reply: {reply_bytes}")
+            print(f"Reply: {reply}")
             print("Sending reply")
             self.send_packet(reply)
 
