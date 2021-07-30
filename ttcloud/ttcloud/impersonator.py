@@ -101,8 +101,7 @@ class LoRaParser(LoRa):
             reply_bytes: List[int] = list(reply.marshall())
             print(f"Reply: {reply_bytes}")
             print("Sending reply")
-            self.write_payload([255, 255, 0, 0] + reply_bytes)
-            self.set_mode(MODE.TX)
+            self.send_packet(reply)
 
 
 if __name__ == "__main__":
