@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 import struct
 from socket import socket
-from packets import unmarshall, TTPacket, TTHeloPacket, TTCloudHeloPacket
+from packets import *
 import time
 from typing import List
 
@@ -22,7 +22,7 @@ class LoRaParser(LoRa):
         self.var = 0
 
         try:
-            print("setting up...")
+            print("setting up lora hat...")
             self.set_freq(868.5)
 
             # Slow+long range  Bw = 125 kHz, Cr = 4/8, Sf = 4096chips/symbol, CRC on. 13 dBm
@@ -36,7 +36,7 @@ class LoRaParser(LoRa):
             self.set_low_data_rate_optim(True)
             self.set_mode(MODE.STDBY)
 
-            print("starting....")
+            print("listening for TT lora packets...")
             self.start()
         except KeyboardInterrupt:
             print("Exit")
@@ -48,16 +48,11 @@ class LoRaParser(LoRa):
     def on_rx_done(self):
         self.clear_irq_flags(RxDone=1)
         payload = self.read_payload(nocheck=True)[4:]
-        print("Receive: ")
-        print(bytes(payload).hex())
+        print(f"RAW Receive: {bytes(payload).hex()}")
         packet: TTPacket = unmarshall(bytes(payload))
-        print(f"Packet type: {type(packet)}")
-        time.sleep(2)  # Wait for the client be ready
+        print(f"Parsed Receive: {packet}")
+        time.sleep(1)  # Wait for the client be ready
         self.handle_receive(packet)
-        #print("Send: ACK")
-        #self.write_payload([255, 255, 0, 0, 65, 67, 75, 0])  # Send ACK
-        #self.set_mode(MODE.TX)
-        #self.var = 1
 
     def on_tx_done(self):
         print("\nTxDone")
@@ -97,29 +92,31 @@ class LoRaParser(LoRa):
 
     def send_packet(self, packet: TTPacket) -> None:
         self.write_payload([255, 255, 0, 0] + list(packet.marshall()))
+        print(f"Sending Reply: {packet}")
         self.set_mode(MODE.TX)
 
     def handle_receive(self, packet: TTPacket) -> None:
         if isinstance(packet, TTHeloPacket):
             reply = TTCloudHeloPacket(receiver_address=packet.sender_address, sender_address=packet.receiver_address, command=190, time=int(time.time()))
-            print(f"Reply: {reply}")
-            print("Sending reply")
             self.send_packet(reply)
+        elif isinstance(packet, TTDummy):
+            self.send_packet(TTCommand1(receiver_address=packet.sender_address, sender_address=packet.receiver_address, command=32, time=int(time.time()), sleep_intervall=60, unknown=(0, 45, 1), heating=30))
+        elif isinstance(packet, LightSensorPacket):
+            self.send_packet(TTCommand2(receiver_address=packet.sender_address, sender_address=packet.receiver_address, command=33, time=int(time.time()), integration_time=50, gain=3))
 
 
 if __name__ == "__main__":
-    test_packet: bytes = bytes.fromhex(
-        "180103c2630799210500"
+#    test_packet: bytes = bytes.fromhex(
+#        "180103c2630799210500"
 #        "180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"
 #        "180103c2520103524d020d010000328800008c88000071b5000013aa0000111dd4004a00eafc940f0000000000007787000074570000fcc5bd430100"
-    )
-    print(test_packet.hex())
-    print(len("180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"))
-    parsed = unmarshall(test_packet)
-    print(parsed)
-    marshalled = parsed.marshall()
-
-    assert marshalled == test_packet
+#    )
+#    print(test_packet.hex())
+#    print(len("180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"))
+#    parsed = unmarshall(test_packet)
+#    print(parsed)
+#    marshalled = parsed.marshall()
+#    assert marshalled == test_packet
 
     lora_parser = LoRaParser()
 

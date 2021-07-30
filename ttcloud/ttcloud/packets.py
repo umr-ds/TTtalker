@@ -349,6 +349,10 @@ class TTCommand2(TTPacket):
 # TODO: Parse packet type 69
 @dataclass
 class TTDummy(TTPacket):
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, TTDummy) and self.__dict__ == other.__dict__
+
     @classmethod
     def unmarshall(
             cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
