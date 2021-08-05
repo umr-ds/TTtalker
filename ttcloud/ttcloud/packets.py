@@ -199,6 +199,79 @@ class DataPacket(TTPacket):
 
 
 @dataclass
+class DataPacket2(TTPacket):
+    packet_number: int
+    time: int
+    growth_sensor: int
+    adc_bandgap: int
+    number_of_bits: int
+    air_relative_humidity: int
+    air_temperature: int
+    gravity_z_mean: int
+    gravity_z_derivation: int
+    gravity_y_mean: int
+    gravity_y_derivation: int
+    gravity_x_mean: int
+    gravity_x_derivation: int
+    StWC: int
+    adc_volt_bat: int
+    temperature_reference: int
+    temperature_heat: int
+    packet_type: int = 69
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, DataPacket2) and self.__dict__ == other.__dict__
+
+    @classmethod
+    def unmarshall(
+        cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
+    ) -> DataPacket2:
+        fields = unpack("=BIIIHHBBhhhhhhhHI", raw_stream.read())
+        packet_number: int = fields[0]
+        time: int = fields[1]
+        temperature_reference: int = fields[2]
+        temperature_heat: int = fields[3]
+        growth_sensor: int = fields[4]
+        adc_bandgap: int = fields[5]
+        number_of_bits: int = fields[6]
+        air_relative_humidity: int = fields[7]
+        air_temperature: int = fields[8]
+        gravity_z_mean: int = fields[9]
+        gravity_z_derivation: int = fields[10]
+        gravity_y_mean: int = fields[11]
+        gravity_y_derivation: int = fields[12]
+        gravity_x_mean: int = fields[13]
+        gravity_x_derivation: int = fields[14]
+        StWC: int = fields[15]
+        adc_volt_bat: int = fields[16]
+
+        return cls(
+            receiver_address=receiver_address,
+            sender_address=sender_address,
+            packet_number=packet_number,
+            time=time,
+            growth_sensor=growth_sensor,
+            adc_bandgap=adc_bandgap,
+            number_of_bits=number_of_bits,
+            air_relative_humidity=air_relative_humidity,
+            air_temperature=air_temperature,
+            gravity_z_mean=gravity_z_mean,
+            gravity_z_derivation=gravity_z_derivation,
+            gravity_y_mean=gravity_y_mean,
+            gravity_y_derivation=gravity_y_derivation,
+            gravity_x_mean=gravity_x_mean,
+            gravity_x_derivation=gravity_x_derivation,
+            StWC=StWC,
+            adc_volt_bat=adc_volt_bat,
+            temperature_reference=temperature_reference,
+            temperature_heat=temperature_heat,
+        )
+
+    def marshall(self) -> bytes:
+        return b""
+
+
+@dataclass
 class LightSensorPacket(TTPacket):
     packet_number: int
     time: int
@@ -346,27 +419,12 @@ class TTCommand2(TTPacket):
             self.gain,
         )
 
-# TODO: Parse packet type 69
-@dataclass
-class TTDummy(TTPacket):
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, TTDummy) and self.__dict__ == other.__dict__
-
-    @classmethod
-    def unmarshall(
-            cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
-    ) -> TTDummy:
-        return TTDummy(receiver_address=receiver_address, sender_address=sender_address)
-
-    def marshall(self) -> bytes:
-        return b''
 
 PACKET_TYPES: Dict[int, Callable[[TTAddress, TTAddress, BytesIO], TTPacket]] = {
     5: TTHeloPacket.unmarshall,
     65: TTCloudHeloPacket.unmarshall,
     66: TTCommand1.unmarshall,
-    69: TTDummy.unmarshall,
+    69: DataPacket2.unmarshall,
     73: LightSensorPacket.unmarshall,
     74: TTCommand2.unmarshall,
     77: DataPacket.unmarshall,

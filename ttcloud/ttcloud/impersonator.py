@@ -7,7 +7,8 @@ from typing import List
 
 import time
 from SX127x.LoRa import *
-#from SX127x.LoRaArgumentParser import LoRaArgumentParser
+
+# from SX127x.LoRaArgumentParser import LoRaArgumentParser
 from SX127x.board_config import BOARD
 
 BOARD.setup()
@@ -55,10 +56,10 @@ class LoRaParser(LoRa):
 
     def on_tx_done(self):
         print("Sending Done - back to receiver mode")
-        self.set_dio_mapping([0,0,0,0,0,0]) # Deaktiviere alle DIOs
+        self.set_dio_mapping([0, 0, 0, 0, 0, 0])  # Deaktiviere alle DIOs
         self.reset_ptr_rx()
-        self.set_mode(MODE.RXCONT) # Receiver mode
-        #print(self.get_irq_flags())
+        self.set_mode(MODE.RXCONT)  # Receiver mode
+        # print(self.get_irq_flags())
 
     def on_cad_done(self):
         print("\non_CadDone")
@@ -85,37 +86,60 @@ class LoRaParser(LoRa):
         self.set_mode(MODE.RXCONT)
 
         while True:
-            #print(f"{x}: sleeping because nothing happend")
+            # print(f"{x}: sleeping because nothing happend")
             time.sleep(0.5)
 
     def send_packet(self, packet: TTPacket) -> None:
         self.write_payload([255, 255, 0, 0] + list(packet.marshall()))
         print(f"Sending Reply: {packet}")
-        self.set_dio_mapping([1,0,0,0,0,0]) # Aktiviere DIO0 für TXDone trigger
+        self.set_dio_mapping([1, 0, 0, 0, 0, 0])  # Aktiviere DIO0 für TXDone trigger
         self.set_mode(MODE.TX)
 
     def handle_receive(self, packet: TTPacket) -> None:
         if isinstance(packet, TTHeloPacket):
-            reply = TTCloudHeloPacket(receiver_address=packet.sender_address, sender_address=packet.receiver_address, command=190, time=int(time.time()))
+            reply = TTCloudHeloPacket(
+                receiver_address=packet.sender_address,
+                sender_address=packet.receiver_address,
+                command=190,
+                time=int(time.time()),
+            )
             self.send_packet(reply)
         elif isinstance(packet, TTDummy):
-            self.send_packet(TTCommand1(receiver_address=packet.sender_address, sender_address=packet.receiver_address, command=32, time=int(time.time()), sleep_intervall=60, unknown=(0, 45, 1), heating=30))
+            self.send_packet(
+                TTCommand1(
+                    receiver_address=packet.sender_address,
+                    sender_address=packet.receiver_address,
+                    command=32,
+                    time=int(time.time()),
+                    sleep_intervall=60,
+                    unknown=(0, 45, 1),
+                    heating=30,
+                )
+            )
         elif isinstance(packet, LightSensorPacket):
-            self.send_packet(TTCommand2(receiver_address=packet.sender_address, sender_address=packet.receiver_address, command=33, time=int(time.time()), integration_time=50, gain=3))
+            self.send_packet(
+                TTCommand2(
+                    receiver_address=packet.sender_address,
+                    sender_address=packet.receiver_address,
+                    command=33,
+                    time=int(time.time()),
+                    integration_time=50,
+                    gain=3,
+                )
+            )
 
 
 if __name__ == "__main__":
-#    test_packet: bytes = bytes.fromhex(
-#        "180103c2630799210500"
-#        "180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"
-#        "180103c2520103524d020d010000328800008c88000071b5000013aa0000111dd4004a00eafc940f0000000000007787000074570000fcc5bd430100"
-#    )
-#    print(test_packet.hex())
-#    print(len("180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"))
-#    parsed = unmarshall(test_packet)
-#    print(parsed)
-#    marshalled = parsed.marshall()
-#    assert marshalled == test_packet
+    #    test_packet: bytes = bytes.fromhex(
+    #        "180103c2630799210500"
+    #        "180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"
+    #        "180103c2520103524d020d010000328800008c88000071b5000013aa0000111dd4004a00eafc940f0000000000007787000074570000fcc5bd430100"
+    #    )
+    #    print(test_packet.hex())
+    #    print(len("180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"))
+    #    parsed = unmarshall(test_packet)
+    #    print(parsed)
+    #    marshalled = parsed.marshall()
+    #    assert marshalled == test_packet
 
     lora_parser = LoRaParser()
-
