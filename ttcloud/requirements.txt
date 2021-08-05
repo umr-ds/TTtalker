@@ -3,4 +3,5 @@ pytest-cov
 black
 pre-commit
 wheel
-setuptools~=57.4.0
+setuptools
+paho-mqtt

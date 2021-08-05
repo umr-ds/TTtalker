@@ -1,52 +1,46 @@
 #! /usr/bin/env python3
-import struct
-from socket import socket
-from packets import *
-import time
-from typing import List
 
+from __future__ import annotations
+import argparse
+import logging
 import time
-from SX127x.LoRa import *
 
-# from SX127x.LoRaArgumentParser import LoRaArgumentParser
+from SX127x.LoRa import LoRa
 from SX127x.board_config import BOARD
+from SX127x.constants import MODE, BW, CODING_RATE
 
-BOARD.setup()
-BOARD.reset()
+from ttcloud.packets import *
 
 
 class LoRaParser(LoRa):
-    def __init__(self, verbose=False):
-        super(LoRaParser, self).__init__(verbose)
+    def __enter__(self) -> LoRaParser:
+        BOARD.setup()
+        BOARD.reset()
+
         self.set_mode(MODE.SLEEP)
         self.set_dio_mapping([0] * 6)
-        self.var = 0
 
-        try:
-            print("setting up lora hat...")
-            self.set_freq(868.5)
+        self.set_freq(868.5)
 
-            # Slow+long range  Bw = 125 kHz, Cr = 4/8, Sf = 4096chips/symbol, CRC on. 13 dBm
-            self.set_pa_config(pa_select=1, max_power=21, output_power=15)
-            self.set_bw(BW.BW125)
-            self.set_coding_rate(CODING_RATE.CR4_8)
-            self.set_spreading_factor(12)
-            self.set_rx_crc(True)
-            # lora.set_lna_gain(GAIN.G1)
-            # lora.set_implicit_header_mode(False)
-            self.set_low_data_rate_optim(True)
-            self.set_mode(MODE.STDBY)
+        # Slow+long range  Bw = 125 kHz, Cr = 4/8, Sf = 4096chips/symbol, CRC on. 13 dBm
+        self.set_pa_config(pa_select=1, max_power=21, output_power=15)
+        self.set_bw(BW.BW125)
+        self.set_coding_rate(CODING_RATE.CR4_8)
+        self.set_spreading_factor(12)
+        self.set_rx_crc(True)
+        # lora.set_lna_gain(GAIN.G1)
+        # lora.set_implicit_header_mode(False)
+        self.set_low_data_rate_optim(True)
+        self.set_mode(MODE.STDBY)
 
-            print("listening for TT lora packets...")
-            self.start()
-        except KeyboardInterrupt:
-            print("Exit")
-        finally:
-            print("Exit")
-            self.set_mode(MODE.SLEEP)
-            BOARD.teardown()  # !!!
+        return self
 
-    def on_rx_done(self):
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.set_mode(MODE.SLEEP)
+        BOARD.teardown()  # !!!
+
+    def on_rx_done(self) -> None:
+        """Callback called when a packet is received."""
         self.clear_irq_flags(RxDone=1)
         payload = self.read_payload(nocheck=True)[4:]
         print(f"RAW Receive: {bytes(payload).hex()}")
@@ -54,39 +48,19 @@ class LoRaParser(LoRa):
         print(f"Parsed Receive: {packet}")
         self.handle_receive(packet)
 
-    def on_tx_done(self):
+    def on_tx_done(self) -> None:
+        """Callback called when a packet has been sent."""
         print("Sending Done - back to receiver mode")
         self.set_dio_mapping([0, 0, 0, 0, 0, 0])  # Deaktiviere alle DIOs
         self.reset_ptr_rx()
         self.set_mode(MODE.RXCONT)  # Receiver mode
         # print(self.get_irq_flags())
 
-    def on_cad_done(self):
-        print("\non_CadDone")
-        print(self.get_irq_flags())
-
-    def on_rx_timeout(self):
-        print("\non_RxTimeout")
-        print(self.get_irq_flags())
-
-    def on_valid_header(self):
-        print("\non_ValidHeader")
-        print(self.get_irq_flags())
-
-    def on_payload_crc_error(self):
-        print("\non_PayloadCrcError")
-        print(self.get_irq_flags())
-
-    def on_fhss_change_channel(self):
-        print("\non_FhssChangeChannel")
-        print(self.get_irq_flags())
-
     def start(self):
         self.reset_ptr_rx()
         self.set_mode(MODE.RXCONT)
 
         while True:
-            # print(f"{x}: sleeping because nothing happend")
             time.sleep(0.5)
 
     def send_packet(self, packet: TTPacket) -> None:
@@ -104,7 +78,7 @@ class LoRaParser(LoRa):
                 time=int(time.time()),
             )
             self.send_packet(reply)
-        elif isinstance(packet, TTDummy):
+        elif isinstance(packet, DataPacket2):
             self.send_packet(
                 TTCommand1(
                     receiver_address=packet.sender_address,
@@ -130,16 +104,16 @@ class LoRaParser(LoRa):
 
 
 if __name__ == "__main__":
-    #    test_packet: bytes = bytes.fromhex(
-    #        "180103c2630799210500"
-    #        "180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"
-    #        "180103c2520103524d020d010000328800008c88000071b5000013aa0000111dd4004a00eafc940f0000000000007787000074570000fcc5bd430100"
-    #    )
-    #    print(test_packet.hex())
-    #    print(len("180103c263079921450580510100410038ffc7260100389f0000112b2f00eff006003ffa000000000000410038ff9039"))
-    #    parsed = unmarshall(test_packet)
-    #    print(parsed)
-    #    marshalled = parsed.marshall()
-    #    assert marshalled == test_packet
+    parser = argparse.ArgumentParser(description="Process some integers.")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    args = parser.parse_args()
 
-    lora_parser = LoRaParser()
+    if args.verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+
+    logging.basicConfig(level=log_level)
+
+    with LoRaParser(verbose=args.verbose) as lora_parser:
+        lora_parser.start()

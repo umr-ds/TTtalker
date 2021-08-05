@@ -1,1 +1,1 @@
-__all__ = ['board_config', 'LoRa', 'LoRaArgumentParser', 'constants']
+__all__ = ["board_config", "LoRa", "LoRaArgumentParser", "constants"]

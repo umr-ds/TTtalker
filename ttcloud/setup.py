@@ -13,5 +13,6 @@ setup(
         "Programming Language :: Python :: 3.9",
     ],
     packages=find_packages(exclude=["tests"]),
+    install_requires=["paho-mqtt", "RPi.GPIO" "spidev"],
     zip_safe=True,
 )
