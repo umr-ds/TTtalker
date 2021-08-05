@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="ttcloud",
+    name="treetalkertalker",
     version="0.0.1",
     description="Impersonates a TreeTalker-Cloud",
     author="Markus Sommer",
@@ -13,6 +13,8 @@ setup(
         "Programming Language :: Python :: 3.9",
     ],
     packages=find_packages(exclude=["tests"]),
-    install_requires=["paho-mqtt", "RPi.GPIO" "spidev"],
+    install_requires=["paho-mqtt"],
+    extras_require={"lora": ["RPi.GPIO", "spidev"]},
+    scripts=["ttt/rci.py"],
     zip_safe=True,
 )

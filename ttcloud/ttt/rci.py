@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 import argparse
+import json
 import logging
 import time
+import paho.mqtt.client as mqtt
 
-from SX127x.LoRa import LoRa
-from SX127x.board_config import BOARD
-from SX127x.constants import MODE, BW, CODING_RATE
+from typing import Any
 
-from ttcloud.packets import *
+from ttt.SX127x.LoRa import LoRa
+from ttt.SX127x.board_config import BOARD
+from ttt.SX127x.constants import MODE, BW, CODING_RATE
+
+from ttt.packets import *
 
 
 class LoRaParser(LoRa):
+    def __init__(self, verbose: bool, broker_address: str):
+        LoRa.__init__(self=self, verbose=verbose)
+        self.mqtt_client = mqtt.Client("ttt")
+        self.mqtt_client.connect(broker_address)
+        self.mqtt_client.on_message = self.on_message
+        self.mqtt_client.subscribe("command")
+
     def __enter__(self) -> LoRaParser:
         BOARD.setup()
         BOARD.reset()
@@ -33,20 +44,29 @@ class LoRaParser(LoRa):
         self.set_low_data_rate_optim(True)
         self.set_mode(MODE.STDBY)
 
+        self.reset_ptr_rx()
+        self.set_mode(MODE.RXCONT)
+
+        self.mqtt_client.loop_start()
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.set_mode(MODE.SLEEP)
         BOARD.teardown()  # !!!
 
+        self.mqtt_client.loop_stop()
+
     def on_rx_done(self) -> None:
         """Callback called when a packet is received."""
         self.clear_irq_flags(RxDone=1)
         payload = self.read_payload(nocheck=True)[4:]
-        print(f"RAW Receive: {bytes(payload).hex()}")
+        logging.debug(f"RAW Receive: {bytes(payload).hex()}")
         packet: TTPacket = unmarshall(bytes(payload))
-        print(f"Parsed Receive: {packet}")
-        self.handle_receive(packet)
+        logging.debug(f"Parsed Receive: {packet}")
+        self.mqtt_client.publish(
+            topic=f"receive/{type(packet)}", payload=json.dumps(packet)
+        )
 
     def on_tx_done(self) -> None:
         """Callback called when a packet has been sent."""
@@ -57,9 +77,6 @@ class LoRaParser(LoRa):
         # print(self.get_irq_flags())
 
     def start(self):
-        self.reset_ptr_rx()
-        self.set_mode(MODE.RXCONT)
-
         while True:
             time.sleep(0.5)
 
@@ -69,43 +86,19 @@ class LoRaParser(LoRa):
         self.set_dio_mapping([1, 0, 0, 0, 0, 0])  # Aktiviere DIO0 für TXDone trigger
         self.set_mode(MODE.TX)
 
-    def handle_receive(self, packet: TTPacket) -> None:
-        if isinstance(packet, TTHeloPacket):
-            reply = TTCloudHeloPacket(
-                receiver_address=packet.sender_address,
-                sender_address=packet.receiver_address,
-                command=190,
-                time=int(time.time()),
-            )
-            self.send_packet(reply)
-        elif isinstance(packet, DataPacket2):
-            self.send_packet(
-                TTCommand1(
-                    receiver_address=packet.sender_address,
-                    sender_address=packet.receiver_address,
-                    command=32,
-                    time=int(time.time()),
-                    sleep_intervall=60,
-                    unknown=(0, 45, 1),
-                    heating=30,
-                )
-            )
-        elif isinstance(packet, LightSensorPacket):
-            self.send_packet(
-                TTCommand2(
-                    receiver_address=packet.sender_address,
-                    sender_address=packet.receiver_address,
-                    command=33,
-                    time=int(time.time()),
-                    integration_time=50,
-                    gain=3,
-                )
-            )
+    def on_message(
+        self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage
+    ) -> None:
+        packet = json.loads(message.payload)
+        self.send_packet(packet)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument(
+        "-b", "--broker", help="Address of the MQTT broker", default="127.0.0.1"
+    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -115,5 +108,5 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=log_level)
 
-    with LoRaParser(verbose=args.verbose) as lora_parser:
+    with LoRaParser(verbose=args.verbose, broker_address=args.broker) as lora_parser:
         lora_parser.start()

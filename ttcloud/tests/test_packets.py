@@ -1,6 +1,6 @@
 from typing import List
 
-from ttcloud.packets import *
+from ttt.packets import *
 
 SAMPLE_RAW: List[bytes] = [
     bytes.fromhex("4a4a4a4a520103520502"),
