@@ -15,6 +15,6 @@ setup(
     packages=find_packages(exclude=["tests"]),
     install_requires=["paho-mqtt"],
     extras_require={"lora": ["RPi.GPIO", "spidev"]},
-    scripts=["ttt/rci.py"],
+    scripts=["ttt/rci.py", "ttt/lde.py"],
     zip_safe=True,
 )

@@ -19,7 +19,7 @@ from ttt.packets import *
 class LoRaParser(LoRa):
     def __init__(self, verbose: bool, broker_address: str):
         LoRa.__init__(self=self, verbose=verbose)
-        self.mqtt_client = mqtt.Client("ttt")
+        self.mqtt_client = mqtt.Client("rci")
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
         self.mqtt_client.subscribe("command")
