@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 import argparse
-import json
 import logging
 import time
 
 from typing import Any
+from base64 import b64encode, b64decode
 
 import paho.mqtt.client as mqtt
 
@@ -17,7 +17,7 @@ class LDE:
     def __init__(self, broker_address: str, address: TTAddress):
         self.address = address
 
-        self.mqtt_client = mqtt.Client("rci")
+        self.mqtt_client = mqtt.Client("lde")
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
         self.mqtt_client.subscribe("receive/#")
@@ -32,7 +32,9 @@ class LDE:
     def on_message(
         self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage
     ) -> None:
-        packet: TTPacket = json.loads(message.payload)
+        logging.debug("Received Packet via MQTT")
+        packet: TTPacket = unmarshall(b64decode(message.payload))
+        logging.debug(f"Unamarshalled packet: {packet}")
 
         if isinstance(packet, TTHeloPacket):
             reply = self.on_helo(packet=packet)
@@ -44,7 +46,8 @@ class LDE:
             logging.error("Unknown packet type")
             return
 
-        self.mqtt_client.publish(topic="command", payload=json.dumps(reply))
+        logging.debug(f"Reply: {reply}")
+        self.mqtt_client.publish(topic="command", payload=b64encode(reply.marshall()))
 
     def on_helo(self, packet: TTHeloPacket) -> TTCloudHeloPacket:
         return TTCloudHeloPacket(
@@ -76,6 +79,7 @@ class LDE:
         )
 
     def start(self):
+        logging.info("Starting Local Decision Engine")
         while True:
             time.sleep(0.5)
 
@@ -95,5 +99,5 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=log_level)
 
-    with LDE as lde:
+    with LDE(broker_address=args.broker, address=TTAddress(3254976792)) as lde:
         lde.start()

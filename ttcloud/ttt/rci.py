@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 import argparse
-import json
 import logging
 import time
 import paho.mqtt.client as mqtt
 
 from typing import Any
+from base64 import b64encode, b64decode
 
 from ttt.SX127x.LoRa import LoRa
 from ttt.SX127x.board_config import BOARD
@@ -63,7 +63,8 @@ class LoRaParser(LoRa):
         packet: TTPacket = unmarshall(bytes(payload))
         logging.debug(f"Parsed Receive: {packet}")
         self.mqtt_client.publish(
-            topic=f"receive/{type(packet)}", payload=json.dumps(packet)
+            topic=f"receive/{packet.__class__.__name__}",
+            payload=b64encode(packet.marshall()),
         )
 
     def on_tx_done(self) -> None:
@@ -75,19 +76,21 @@ class LoRaParser(LoRa):
         # print(self.get_irq_flags())
 
     def start(self):
+        logging.info("Starting Radio Communication Interface")
         while True:
             time.sleep(0.5)
 
     def send_packet(self, packet: TTPacket) -> None:
+        logging.debug(f"Sending packet: {packet}")
         self.write_payload([255, 255, 0, 0] + list(packet.marshall()))
-        print(f"Sending Reply: {packet}")
         self.set_dio_mapping([1, 0, 0, 0, 0, 0])  # Aktiviere DIO0 für TXDone trigger
         self.set_mode(MODE.TX)
 
     def on_message(
         self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage
     ) -> None:
-        packet = json.loads(message.payload)
+        logging.debug("Received mqtt message")
+        packet = unmarshall(b64decode(message.payload))
         self.send_packet(packet)
 
 
