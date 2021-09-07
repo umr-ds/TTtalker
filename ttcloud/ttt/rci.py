@@ -25,8 +25,6 @@ class LoRaParser(LoRa):
         self.mqtt_client.subscribe("command")
 
     def __enter__(self) -> LoRaParser:
-        BOARD.setup()
-        BOARD.reset()
 
         self.set_mode(MODE.SLEEP)
         self.set_dio_mapping([0] * 6)
@@ -100,6 +98,9 @@ if __name__ == "__main__":
         "-b", "--broker", help="Address of the MQTT broker", default="127.0.0.1"
     )
     args = parser.parse_args()
+
+    BOARD.setup()
+    BOARD.reset()
 
     if args.verbose:
         log_level = logging.DEBUG
