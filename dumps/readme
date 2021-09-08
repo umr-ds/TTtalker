@@ -1,0 +1,3 @@
+PinOut Serial Interface TT-Cloud und Treetalker:
+links unten 1, links oben 4: 1: GND, 2: CTS, 3: TX (cross auf RX), 4: DTR (default low), 5: RX (cross auf TX), 6: NC (3,3V Supply wird nicht benötigt)
+
