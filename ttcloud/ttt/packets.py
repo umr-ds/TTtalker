@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 from struct import unpack, pack
-from typing import Dict, Callable, Tuple
+from typing import Dict, Callable, Tuple, List, Any
 
 
 @dataclass
@@ -31,6 +31,9 @@ class TTPacket:
         raise NotImplemented
 
     def marshall(self) -> bytes:
+        raise NotImplemented
+
+    def to_influx_json(self) -> List[Dict[str, Any]]:
         raise NotImplemented
 
 
@@ -197,6 +200,81 @@ class DataPacket(TTPacket):
             self.adc_volt_bat,
         )
 
+    def to_influx_json(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "measurment": "stem_temperature",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                    "heating": True,
+                },
+                "time": self.time,
+                "fields": {
+                    "reference_probe_cold": self.temperature_reference[0],
+                    "reference_probe_hot": self.temperature_reference[1],
+                    "heat_probe_cold": self.temperature_heat[0],
+                    "heat_probe_hot": self.temperature_heat[1],
+                },
+            },
+            {
+                "measurement": "growth",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "distance": self.growth_sensor,
+                },
+            },
+            {
+                "measurement": "power",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "bandgap": self.adc_bandgap,
+                    "voltage": self.adc_volt_bat,
+                },
+            },
+            {
+                "measurement": "stem_water",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "content": self.StWC,
+                },
+            },
+            {
+                "measurement": "air",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "temperature": self.air_temperature,
+                    "humidity": self.air_relative_humidity,
+                },
+            },
+            {
+                "measurement": "gravity",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "x_mean": self.gravity_x_mean,
+                    "x_derivation": self.gravity_x_derivation,
+                    "y_mean": self.gravity_y_mean,
+                    "y_derivation": self.gravity_y_derivation,
+                    "z_mean": self.gravity_z_mean,
+                    "z_derivation": self.gravity_z_derivation,
+                },
+            },
+        ]
+
 
 @dataclass
 class DataPacket2(TTPacket):
@@ -268,7 +346,104 @@ class DataPacket2(TTPacket):
         )
 
     def marshall(self) -> bytes:
-        return b""
+        return pack(
+            "=IIBBIIIHHBBhhhhhhhHI",
+            self.receiver_address.address,
+            self.sender_address.address,
+            self.packet_type,
+            self.packet_number,
+            self.time,
+            self.temperature_reference,
+            self.temperature_heat,
+            self.growth_sensor,
+            self.adc_bandgap,
+            self.number_of_bits,
+            self.air_relative_humidity,
+            self.air_temperature,
+            self.gravity_z_mean,
+            self.gravity_z_derivation,
+            self.gravity_y_mean,
+            self.gravity_y_derivation,
+            self.gravity_x_mean,
+            self.gravity_x_derivation,
+            self.StWC,
+            self.adc_volt_bat,
+        )
+
+    def to_influx_json(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "measurment": "stem_temperature",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                    "heating": False,
+                },
+                "time": self.time,
+                "fields": {
+                    "reference_probe_cold": self.temperature_reference,
+                    "reference_probe_hot": self.temperature_reference,
+                    "heat_probe_cold": self.temperature_heat,
+                    "heat_probe_hot": self.temperature_heat,
+                },
+            },
+            {
+                "measurement": "growth",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "distance": self.growth_sensor,
+                },
+            },
+            {
+                "measurement": "power",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "bandgap": self.adc_bandgap,
+                    "voltage": self.adc_volt_bat,
+                },
+            },
+            {
+                "measurement": "stem_water",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "content": self.StWC,
+                },
+            },
+            {
+                "measurement": "air",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "temperature": self.air_temperature,
+                    "humidity": self.air_relative_humidity,
+                },
+            },
+            {
+                "measurement": "gravity",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                },
+                "time": self.time,
+                "fields": {
+                    "x_mean": self.gravity_x_mean,
+                    "x_derivation": self.gravity_x_derivation,
+                    "y_mean": self.gravity_y_mean,
+                    "y_derivation": self.gravity_y_derivation,
+                    "z_mean": self.gravity_z_mean,
+                    "z_derivation": self.gravity_z_derivation,
+                },
+            },
+        ]
 
 
 @dataclass
@@ -337,6 +512,44 @@ class LightSensorPacket(TTPacket):
             self.integration_time,
             self.gain,
         )
+
+    def to_influx_json(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "measurment": "AS7263",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                    "gain": self.gain,
+                    "integration_time": self.integration_time,
+                },
+                "time": self.time,
+                "fields": {
+                    "610": self.AS7263[610],
+                    "680": self.AS7263[680],
+                    "730": self.AS7263[730],
+                    "760": self.AS7263[760],
+                    "810": self.AS7263[810],
+                    "860": self.AS7263[860],
+                },
+            },
+            {
+                "measurment": "AS7262",
+                "tags": {
+                    "treetalker": self.sender_address.address,
+                    "gain": self.gain,
+                    "integration_time": self.integration_time,
+                },
+                "time": self.time,
+                "fields": {
+                    "450": self.AS7262[450],
+                    "500": self.AS7262[500],
+                    "550": self.AS7262[550],
+                    "570": self.AS7262[570],
+                    "600": self.AS7262[600],
+                    "650": self.AS7262[650],
+                },
+            },
+        ]
 
 
 @dataclass

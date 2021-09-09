@@ -5,12 +5,15 @@ import argparse
 import logging
 import time
 
-from typing import Any
+from typing import Any, Dict, Callable, Union
 from base64 import b64encode, b64decode
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.packettypes import PacketTypes
+import influxdb as influx
 
 from ttt.packets import *
+from ttt.policy import Policy, LocalDataPolicy, LocalLightPolicy
 
 
 class LDE:
@@ -21,27 +24,56 @@ class LDE:
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
         self.mqtt_client.subscribe("receive/#")
+        self.mqtt_client.subscribe("policy/#")
+
+        self.influx_client = influx.InfluxDBClient(host="localhost", port=8086)
+
+        local_data_policy = LocalDataPolicy(local_address=address)
+
+        self.local_policies: Dict[str, Policy] = {
+            "DataPacket": local_data_policy,
+            "DataPacket2": local_data_policy,
+            "LightSensorPacket": LocalLightPolicy(local_address=address),
+        }
+        self.aggregate_policies: Dict[str, Policy] = {}
 
     def __enter__(self) -> LDE:
         self.mqtt_client.loop_start()
+        self.influx_client.create_database("ttt")
+        self.influx_client.switch_database("ttt")
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.mqtt_client.loop_stop()
+        self.mqtt_client.disconnect(
+            reasoncode=mqtt.ReasonCodes(
+                packetType=PacketTypes.DISCONNECT, aName="Normal disconnection"
+            )
+        )
+        self.influx_client.close()
 
     def on_message(
         self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage
     ) -> None:
-        logging.debug("Received Packet via MQTT")
+        logging.debug("Received MQTT Message")
+
+        if "receive" in message.topic:
+            self._handle_packet(message)
+        elif "policy" in message.topic:
+            self._handle_policy(message)
+        else:
+            logging.error(f"Received message from unknown topic {message.topic}")
+
+    def _handle_packet(self, message: mqtt.MQTTMessage) -> None:
         packet: TTPacket = unmarshall(b64decode(message.payload))
         logging.debug(f"Unamarshalled packet: {packet}")
 
         if isinstance(packet, TTHeloPacket):
-            reply = self.on_helo(packet=packet)
-        elif isinstance(packet, DataPacket2):
-            reply = self.on_data2(packet=packet)
+            reply = self._on_helo(packet=packet)
+        elif isinstance(packet, DataPacket) or isinstance(packet, DataPacket2):
+            reply = self._on_data(packet=packet)
         elif isinstance(packet, LightSensorPacket):
-            reply = self.on_light(packet=packet)
+            reply = self._on_light(packet=packet)
         else:
             logging.error("Unknown packet type")
             return
@@ -49,7 +81,10 @@ class LDE:
         logging.debug(f"Reply: {reply}")
         self.mqtt_client.publish(topic="command", payload=b64encode(reply.marshall()))
 
-    def on_helo(self, packet: TTHeloPacket) -> TTCloudHeloPacket:
+    def _handle_policy(self, message: mqtt.MQTTMessage) -> None:
+        pass
+
+    def _on_helo(self, packet: TTHeloPacket) -> TTCloudHeloPacket:
         return TTCloudHeloPacket(
             receiver_address=packet.sender_address,
             sender_address=self.address,
@@ -57,26 +92,26 @@ class LDE:
             time=int(time.time()),
         )
 
-    def on_data2(self, packet: DataPacket2) -> TTCommand1:
-        return TTCommand1(
-            receiver_address=packet.sender_address,
-            sender_address=packet.receiver_address,
-            command=32,
-            time=int(time.time()),
-            sleep_intervall=60,
-            unknown=(0, 45, 1),
-            heating=30,
-        )
+    def _on_data(self, packet: Union[DataPacket, DataPacket2]) -> TTPacket:
+        anomaly, reply = self.local_policies[packet.__class__.__name__].evaluate(packet)
 
-    def on_light(self, packet: LightSensorPacket) -> TTCommand2:
-        return TTCommand2(
-            receiver_address=packet.sender_address,
-            sender_address=packet.receiver_address,
-            command=33,
-            time=int(time.time()),
-            integration_time=50,
-            gain=3,
-        )
+        if not anomaly:
+            _, reply = self.aggregate_policies[packet.__class__.__name__].evaluate(
+                packet
+            )
+
+        packet_data = packet.to_influx_json()
+        self.influx_client.write_points(packet_data)
+
+        return reply
+
+    def _on_light(self, packet: LightSensorPacket) -> TTPacket:
+        _, reply = self.local_policies[packet.__class__.__name__].evaluate(packet)
+
+        packet_data = packet.to_influx_json()
+        self.influx_client.write_points(packet_data)
+
+        return reply
 
     def start(self):
         logging.info("Starting Local Decision Engine")

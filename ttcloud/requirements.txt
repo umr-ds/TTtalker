@@ -5,3 +5,4 @@ pre-commit
 wheel
 setuptools
 paho-mqtt
+influxdb

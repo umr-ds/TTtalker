@@ -5,6 +5,7 @@ import argparse
 import logging
 import time
 import paho.mqtt.client as mqtt
+from paho.mqtt.packettypes import PacketTypes
 
 from typing import Any
 from base64 import b64encode, b64decode
@@ -54,6 +55,11 @@ class LoRaParser(LoRa):
         BOARD.teardown()  # !!!
 
         self.mqtt_client.loop_stop()
+        self.mqtt_client.disconnect(
+            reasoncode=mqtt.ReasonCodes(
+                packetType=PacketTypes.DISCONNECT, aName="Normal disconnection"
+            )
+        )
 
     def on_rx_done(self) -> None:
         """Callback called when a packet is received."""
@@ -70,6 +76,7 @@ class LoRaParser(LoRa):
     def on_tx_done(self) -> None:
         """Callback called when a packet has been sent."""
         print("Sending Done - back to receiver mode")
+        time.sleep(4)
         self.set_dio_mapping([0, 0, 0, 0, 0, 0])  # Deaktiviere alle DIOs
         self.reset_ptr_rx()
         self.set_mode(MODE.RXCONT)  # Receiver mode
