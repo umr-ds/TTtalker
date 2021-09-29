@@ -101,6 +101,7 @@ class LDE:
             )
 
         packet_data = packet.to_influx_json()
+        logging.debug(f"Sending data to influx: {packet_data}")
         self.influx_client.write_points(packet_data)
 
         return reply
@@ -109,6 +110,7 @@ class LDE:
         _, reply = self.local_policies[packet.__class__.__name__].evaluate(packet)
 
         packet_data = packet.to_influx_json()
+        logging.debug(f"Sending data to influx: {packet_data}")
         self.influx_client.write_points(packet_data)
 
         return reply

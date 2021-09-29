@@ -203,7 +203,7 @@ class DataPacket(TTPacket):
     def to_influx_json(self) -> List[Dict[str, Any]]:
         return [
             {
-                "measurment": "stem_temperature",
+                "measurement": "stem_temperature",
                 "tags": {
                     "treetalker": self.sender_address.address,
                     "heating": True,
@@ -373,7 +373,7 @@ class DataPacket2(TTPacket):
     def to_influx_json(self) -> List[Dict[str, Any]]:
         return [
             {
-                "measurment": "stem_temperature",
+                "measurement": "stem_temperature",
                 "tags": {
                     "treetalker": self.sender_address.address,
                     "heating": False,
@@ -516,7 +516,7 @@ class LightSensorPacket(TTPacket):
     def to_influx_json(self) -> List[Dict[str, Any]]:
         return [
             {
-                "measurment": "AS7263",
+                "measurement": "AS7263",
                 "tags": {
                     "treetalker": self.sender_address.address,
                     "gain": self.gain,
@@ -533,7 +533,7 @@ class LightSensorPacket(TTPacket):
                 },
             },
             {
-                "measurment": "AS7262",
+                "measurement": "AS7262",
                 "tags": {
                     "treetalker": self.sender_address.address,
                     "gain": self.gain,
