@@ -4,6 +4,8 @@ from typing import Tuple, Union
 
 from dataclasses import dataclass
 
+import influxdb as influx
+
 from ttt.packets import (
     TTPacket,
     DataPacket,
@@ -12,11 +14,15 @@ from ttt.packets import (
     TTCommand2,
     TTAddress,
 )
+from ttt.util import compute_temperature
+
+mV_BANDGAP = 1100
 
 
 @dataclass
 class Policy:
     local_address: TTAddress
+    influx_client: influx.InfluxDBClient
 
     def evaluate(self, packet: TTPacket) -> Tuple[bool, TTPacket]:
         """Evaluates the received packet und returns a potential reply packet
@@ -32,6 +38,17 @@ class Policy:
 
 
 class LocalDataPolicy(Policy):
+    def _evaluate_battery(self, packet: DataPacket):
+        battery_voltage = (
+            2 * mV_BANDGAP * (float(packet.adc_volt_bat) / float(packet.adc_bandgap))
+        )
+
+        # TODO: Do some linear regression, or Holt-Winters, or whatever
+
+    def _evaluate_temperatures(self, packet: DataPacket):
+        temperature_reference_0 = compute_temperature(packet.temperature_reference[0])
+        temperature_reference_1 = compute_temperature(packet.temperature_reference[1])
+
     def evaluate(
         self, packet: Union[DataPacket, DataPacket2]
     ) -> Tuple[bool, TTCommand1]:

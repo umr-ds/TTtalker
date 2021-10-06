@@ -5,4 +5,5 @@ __all__ = [
     "packets",
     "policy",
     "SX127x",
+    "util",
 ]

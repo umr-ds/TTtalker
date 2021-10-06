@@ -28,12 +28,16 @@ class LDE:
 
         self.influx_client = influx.InfluxDBClient(host="localhost", port=8086)
 
-        local_data_policy = LocalDataPolicy(local_address=address)
+        local_data_policy = LocalDataPolicy(
+            local_address=address, influx_client=self.influx_client
+        )
 
         self.local_policies: Dict[str, Policy] = {
             "DataPacket": local_data_policy,
             "DataPacket2": local_data_policy,
-            "LightSensorPacket": LocalLightPolicy(local_address=address),
+            "LightSensorPacket": LocalLightPolicy(
+                local_address=address, influx_client=self.influx_client
+            ),
         }
         self.aggregate_policies: Dict[str, Policy] = {}
 
