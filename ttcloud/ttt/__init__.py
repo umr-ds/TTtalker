@@ -1,6 +1,7 @@
 __all__ = [
     "radio_communication_interface",
     "local_decision_engine",
+    "data_archiver",
     "dummy_radio",
     "packets",
     "policy",

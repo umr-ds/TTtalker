@@ -105,7 +105,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument(
-        "-b", "--broker", help="Address of the MQTT broker", default="127.0.0.1"
+        "-b", "--broker", help="Address of the MQTT broker", default="localhost"
     )
     args = parser.parse_args()
 

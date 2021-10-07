@@ -96,7 +96,7 @@ if __name__ == "__main__":
         description="Component sends dummy packets via MQTT to test other components"
     )
     parser.add_argument(
-        "-b", "--broker", help="Address of the MQTT broker", default="127.0.0.1"
+        "-b", "--broker", help="Address of the MQTT broker", default="localhost"
     )
     args = parser.parse_args()
 

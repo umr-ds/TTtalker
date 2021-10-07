@@ -17,7 +17,7 @@ from ttt.policy import Policy, LocalDataPolicy, LocalLightPolicy
 
 
 class LDE:
-    def __init__(self, broker_address: str, address: TTAddress):
+    def __init__(self, broker_address: str, influx_address: str, address: TTAddress):
         self.address = address
 
         self.mqtt_client = mqtt.Client("lde")
@@ -26,7 +26,7 @@ class LDE:
         self.mqtt_client.subscribe("receive/#")
         self.mqtt_client.subscribe("policy/#")
 
-        self.influx_client = influx.InfluxDBClient(host="localhost", port=8086)
+        self.influx_client = influx.InfluxDBClient(host=influx_address, port=8086)
 
         local_data_policy = LocalDataPolicy(
             local_address=address, influx_client=self.influx_client
@@ -129,7 +129,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument(
-        "-b", "--broker", help="Address of the MQTT broker", default="127.0.0.1"
+        "-b", "--broker", help="Address of the MQTT broker", default="localhost"
+    )
+    parser.add_argument(
+        "-i", "--influx", help="Address of the influxdb", default="localhost"
     )
     args = parser.parse_args()
 
@@ -140,5 +143,9 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=log_level)
 
-    with LDE(broker_address=args.broker, address=TTAddress(3254976792)) as lde:
+    with LDE(
+        broker_address=args.broker,
+        influx_address=args.influx,
+        address=TTAddress(3254976792),
+    ) as lde:
         lde.start()
