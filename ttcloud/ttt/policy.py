@@ -14,9 +14,7 @@ from ttt.packets import (
     TTCommand2,
     TTAddress,
 )
-from ttt.util import compute_temperature
-
-mV_BANDGAP = 1100
+from ttt.util import compute_temperature, compute_battery_voltage
 
 
 @dataclass
@@ -39,8 +37,8 @@ class Policy:
 
 class LocalDataPolicy(Policy):
     def _evaluate_battery(self, packet: DataPacket):
-        battery_voltage = (
-            2 * mV_BANDGAP * (float(packet.adc_volt_bat) / float(packet.adc_bandgap))
+        battery_voltage = compute_battery_voltage(
+            adc_volt_bat=packet.adc_volt_bat, adc_bandgap=packet.adc_bandgap
         )
 
         # TODO: Do some linear regression, or Holt-Winters, or whatever

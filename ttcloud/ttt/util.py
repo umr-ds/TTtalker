@@ -1,3 +1,6 @@
+mV_BANDGAP = 1100
+
+
 def compute_temperature(measurement: int) -> float:
     return round(
         (
@@ -8,3 +11,7 @@ def compute_temperature(measurement: int) -> float:
         ),
         2,
     )
+
+
+def compute_battery_voltage(adc_volt_bat: int, adc_bandgap: int) -> float:
+    return 2 * mV_BANDGAP * (float(adc_volt_bat) / float(adc_bandgap))

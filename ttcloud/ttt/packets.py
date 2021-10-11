@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from struct import unpack, pack
 from typing import Dict, Callable, Tuple, List, Any
+from util import compute_battery_voltage, compute_temperature
 
 
 @dataclass
@@ -208,12 +209,21 @@ class DataPacket(TTPacket):
                     "treetalker": self.sender_address.address,
                     "heating": True,
                 },
-                "time": self.time,
                 "fields": {
                     "reference_probe_cold": self.temperature_reference[0],
                     "reference_probe_hot": self.temperature_reference[1],
                     "heat_probe_cold": self.temperature_heat[0],
                     "heat_probe_hot": self.temperature_heat[1],
+                    "ttt_reference_probe_cold": compute_temperature(
+                        self.temperature_reference[0]
+                    ),
+                    "ttt_reference_probe_hot": compute_temperature(
+                        self.temperature_reference[1]
+                    ),
+                    "ttt_heat_probe_cold": compute_temperature(
+                        self.temperature_heat[0]
+                    ),
+                    "ttt_heat_probe_hot": compute_temperature(self.temperature_heat[1]),
                 },
             },
             {
@@ -221,7 +231,6 @@ class DataPacket(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "distance": self.growth_sensor,
                 },
@@ -231,10 +240,12 @@ class DataPacket(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "bandgap": self.adc_bandgap,
                     "voltage": self.adc_volt_bat,
+                    "ttt_voltage": compute_battery_voltage(
+                        adc_volt_bat=self.adc_volt_bat, adc_bandgap=self.adc_bandgap
+                    ),
                 },
             },
             {
@@ -242,7 +253,6 @@ class DataPacket(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "content": self.StWC,
                 },
@@ -252,7 +262,6 @@ class DataPacket(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "temperature": self.air_temperature,
                     "humidity": self.air_relative_humidity,
@@ -263,7 +272,6 @@ class DataPacket(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "x_mean": self.gravity_x_mean,
                     "x_derivation": self.gravity_x_derivation,
@@ -378,7 +386,6 @@ class DataPacket2(TTPacket):
                     "treetalker": self.sender_address.address,
                     "heating": False,
                 },
-                "time": self.time,
                 "fields": {
                     "reference_probe_cold": self.temperature_reference,
                     "reference_probe_hot": self.temperature_reference,
@@ -391,7 +398,6 @@ class DataPacket2(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "distance": self.growth_sensor,
                 },
@@ -401,7 +407,6 @@ class DataPacket2(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "bandgap": self.adc_bandgap,
                     "voltage": self.adc_volt_bat,
@@ -412,7 +417,6 @@ class DataPacket2(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "content": self.StWC,
                 },
@@ -422,7 +426,6 @@ class DataPacket2(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "temperature": self.air_temperature,
                     "humidity": self.air_relative_humidity,
@@ -433,7 +436,6 @@ class DataPacket2(TTPacket):
                 "tags": {
                     "treetalker": self.sender_address.address,
                 },
-                "time": self.time,
                 "fields": {
                     "x_mean": self.gravity_x_mean,
                     "x_derivation": self.gravity_x_derivation,
@@ -522,7 +524,6 @@ class LightSensorPacket(TTPacket):
                     "gain": self.gain,
                     "integration_time": self.integration_time,
                 },
-                "time": self.time,
                 "fields": {
                     "610": self.AS7263[610],
                     "680": self.AS7263[680],
@@ -539,7 +540,6 @@ class LightSensorPacket(TTPacket):
                     "gain": self.gain,
                     "integration_time": self.integration_time,
                 },
-                "time": self.time,
                 "fields": {
                     "450": self.AS7262[450],
                     "500": self.AS7262[500],
