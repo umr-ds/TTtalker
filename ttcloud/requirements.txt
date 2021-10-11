@@ -6,3 +6,4 @@ wheel
 setuptools
 paho-mqtt
 influxdb
+scikit-learn

@@ -13,7 +13,7 @@ setup(
         "Programming Language :: Python :: 3.9",
     ],
     packages=find_packages(exclude=["tests"]),
-    install_requires=["paho-mqtt", "influxdb"],
+    install_requires=["paho-mqtt", "influxdb", "scikit-learn"],
     extras_require={"lora": ["RPi.GPIO", "spidev"]},
     scripts=[
         "ttt/radio_communication_interface.py",
