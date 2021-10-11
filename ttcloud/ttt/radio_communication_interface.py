@@ -117,7 +117,11 @@ if __name__ == "__main__":
     else:
         log_level = logging.INFO
 
-    logging.basicConfig(level=log_level)
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s %(levelname)-8s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
     with LoRaParser(verbose=args.verbose, broker_address=args.broker) as lora_parser:
         lora_parser.start()
