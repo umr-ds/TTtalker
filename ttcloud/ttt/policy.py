@@ -1,3 +1,4 @@
+import json
 import time
 
 from typing import Tuple, Union
@@ -63,6 +64,7 @@ class LocalDataPolicy(Policy):
 
         reg: LinearRegression = LinearRegression().fit(times, voltages)
 
+        # TODO: discuss: evtl sinnig dies in eine extra funktion auszulagern, jedoch wegen der brisanz des Stromverbrauches mit erhöhter Priorität zu den anderen eingehenden Parametern?
         try:
             measurement_interval = next(
                 self.influx_client.query(
@@ -94,12 +96,63 @@ class LocalDataPolicy(Policy):
 
         return measurement_interval
 
-    def _evaluate_temperatures(self, packet: DataPacket):
+    def _evaluate_brightness(self, packet: DataPacket, timelim="2d") -> int:
+        # Welche Variable enthält dies?
+        pass
+
+    # macht es überhaupt sinn dies so zu evaluieren? schließlich bleibt ein umgefallener baum eine anomalie, selbst wenn es 3 tage her ist
+    # kurzfristige schwankungen sind aber in der Regel ganz normal, stärkeres schwingen kann sowohl Wetter als auch Krankheitsbedingt vom Baum sein
+    # Hier müsste eigentlich ein "known good value" definiert werden.
+    def _evaluate_gravity(self, packet: DataPacket, timelim="2d") -> int:
+        # gravity_z_mean=gravity_z_mean,
+        # gravity_z_derivation=gravity_z_derivation,
+        # gravity_y_mean=gravity_y_mean,
+        # gravity_y_derivation=gravity_y_derivation,
+        # gravity_x_mean=gravity_x_mean,
+        # gravity_x_derivation=gravity_x_derivation,
+        pass
+
+    # return: Gesamtabweichung - Grenzwerte müssen festgelegt werden - Tuple: referenzabweichung, vorheizung delta, nachheizung delta
+    # Idee: referenzabweichung am wichtigsten für umgebungswerte, vorheizung delta erkennt ob sensoren defekt, nachheizung delta ob baum tot
+    # timelim sollte 1d, 2d und 5d sein, sollte in evaluate funktion mehrfach aufgerufen werden
+    def _evaluate_temperatures(self, packet: DataPacket, timelim="2d") -> Tuple[int, int, int]:
         temperature_reference_0 = compute_temperature(packet.temperature_reference[0])
         temperature_reference_1 = compute_temperature(packet.temperature_reference[1])
+        temperature_heat_0 = compute_temperature(packet.temperature_heat[0])
+        temperature_heat_1 = compute_temperature(packet.temperature_heat[1])
+        delta_heat_pre = abs(temperature_heat_0 - temperature_reference_0)
+        delta_heat_post = abs(temperature_heat_1 - temperature_reference_1)
+
+        # Welcher Sensor speist "air_temperature"? erstmal weggelassen
+
+        params = {"timelim": timelim}
+        data: ResultSet = self.influx_client.query(
+            'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - $timelim',
+            params={"params": json.dumps(params)}
+        )
+
+        x = 0
+        sum_delta_heat_pre = 0
+        sum_delta_heat_post = 0
+        sum_heat_reference = 0
+
+        for datapoint in data.get_points("stem_temperature"):
+            x = x + 1
+            sum_delta_heat_pre = sum_delta_heat_pre + abs(
+                datapoint["ttt_heat_probe_cold"] - datapoint["ttt_reference_probe_cold"])
+            sum_delta_heat_post = sum_delta_heat_post + abs(
+                datapoint["ttt_heat_probe_hot"] - datapoint["ttt_reference_probe_hot"])
+            sum_heat_reference = sum_heat_reference + ((abs(datapoint["ttt_heat_probe_cold"]) + abs(
+                datapoint["ttt_reference_probe_hot"]) + abs(datapoint["ttt_reference_probe_cold"])) / 3)
+
+        abw_referenz = ((abs(temperature_heat_0) + abs(temperature_reference_0) + abs(temperature_reference_1)) / 3) - (
+                sum_heat_reference / x)
+        abw_delta_heat_pre = delta_heat_pre - (sum_delta_heat_pre / x)
+        abw_delta_heat_post = delta_heat_post - (sum_delta_heat_post / x)
+        return [abw_referenz, abw_delta_heat_pre, abw_delta_heat_post]
 
     def evaluate(
-        self, packet: Union[DataPacket, DataPacket2]
+            self, packet: Union[DataPacket, DataPacket2]
     ) -> Tuple[bool, TTCommand1]:
         return True, TTCommand1(
             receiver_address=packet.sender_address,
