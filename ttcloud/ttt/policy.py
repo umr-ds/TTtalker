@@ -45,7 +45,8 @@ class Policy:
 
 
 class DataPolicy(Policy):
-    aggregated_movements: Dict[str, float]
+    aggregated_movement: Dict[str, float]
+    aggregated_temperature: Dict[str, float]
 
     def _evaluate_battery(self, packet: DataPacket) -> int:
         battery_voltage = compute_battery_voltage(
@@ -121,7 +122,7 @@ class DataPolicy(Policy):
         )
 
     def _evaluate_movement(self, packet: DataPacket) -> bool:
-        if not self.aggregated_movements:
+        if not self.aggregated_movement:
             logging.info("Haven't received any aggregated movement data yet.")
             return False
 
@@ -130,12 +131,12 @@ class DataPolicy(Policy):
         z = packet.gravity_z_derivation
 
         return (
-            abs(x - self.aggregated_movements["mean_x"])
-            > self.aggregated_movements["stdev_x"]
-            or abs(y - self.aggregated_movements["mean_y"])
-            > self.aggregated_movements["stdev_y"]
-            or abs(z - self.aggregated_movements["mean_z"])
-            > self.aggregated_movements["stdev_z"]
+            abs(x - self.aggregated_movement["mean_x"])
+            > self.aggregated_movement["stdev_x"]
+            or abs(y - self.aggregated_movement["mean_y"])
+            > self.aggregated_movement["stdev_y"]
+            or abs(z - self.aggregated_movement["mean_z"])
+            > self.aggregated_movement["stdev_z"]
         )
 
     def _evaluate_gravity(self, packet: DataPacket) -> int:
@@ -154,12 +155,18 @@ class DataPolicy(Policy):
         ) or self._evaluate_movement(packet=packet)
 
     def _evaluate_temperature(self, packet: DataPacket) -> bool:
-        temperature_reference_0 = compute_temperature(packet.temperature_reference[0])
-        temperature_reference_1 = compute_temperature(packet.temperature_reference[1])
-        temperature_heat_0 = compute_temperature(packet.temperature_heat[0])
-        temperature_heat_1 = compute_temperature(packet.temperature_heat[1])
-        delta_cold = abs(temperature_heat_0 - temperature_reference_0)
-        delta_hot = abs(temperature_heat_1 - temperature_reference_1)
+        if not self.aggregated_movement:
+            logging.info("Haven't received any aggregated temperature data yet.")
+            return False
+
+        temperature_reference_cold = compute_temperature(
+            packet.temperature_reference[0]
+        )
+        temperature_reference_hot = compute_temperature(packet.temperature_reference[1])
+        temperature_heat_cold = compute_temperature(packet.temperature_heat[0])
+        temperature_heat_hot = compute_temperature(packet.temperature_heat[1])
+        delta_cold = abs(temperature_heat_cold - temperature_reference_cold)
+        delta_hot = abs(temperature_heat_hot - temperature_reference_hot)
 
         data: ResultSet = self.influx_client.query(
             f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
@@ -181,18 +188,18 @@ class DataPolicy(Policy):
             for heat, reference in zip(heat_probe_cold, reference_probe_cold)
         ]
         mean_delta_cold = mean(deltas_cold)
-        stdev_delta_cold = stdev(deltas_cold, mean_delta_cold)
 
         deltas_hot: List[float] = [
             abs(heat - reference)
             for heat, reference in zip(heat_probe_hot, reference_probe_hot)
         ]
         mean_delta_hot = mean(deltas_hot)
-        stdev_delta_hot = stdev(deltas_hot, mean_delta_hot)
 
         return (
-            abs(delta_cold - mean_delta_cold) > stdev_delta_cold
-            or abs(delta_hot - mean_delta_hot) > stdev_delta_hot
+            abs(delta_cold - mean_delta_cold)
+            > self.aggregated_temperature["stdev_delta_cold"]
+            or abs(delta_hot - mean_delta_hot)
+            > self.aggregated_temperature["stdev_delta_hot"]
         )
 
     def evaluate(self, packet: DataPacket) -> TTCommand1:

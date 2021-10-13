@@ -77,11 +77,49 @@ class Aggregator:
             "stdev_z": stdev_z,
         }
 
+    def _aggregate_temperature(self) -> Dict[str, float]:
+        data: ResultSet = self.influx_client.query(
+            f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {ANALYSIS_INTERVAL}'
+        )
+
+        reference_probe_cold: List[float] = []
+        reference_probe_hot: List[float] = []
+        heat_probe_cold: List[float] = []
+        heat_probe_hot: List[float] = []
+
+        for datapoint in data.get_points("stem_temperature"):
+            reference_probe_cold.append(datapoint["ttt_reference_probe_cold"])
+            reference_probe_hot.append(datapoint["ttt_reference_probe_hot"])
+            heat_probe_cold.append(datapoint["ttt_heat_probe_cold"])
+            heat_probe_hot.append(datapoint["ttt_heat_probe_hot"])
+
+        deltas_cold: List[float] = [
+            abs(heat - reference)
+            for heat, reference in zip(heat_probe_cold, reference_probe_cold)
+        ]
+        stdev_delta_cold = stdev(deltas_cold)
+
+        deltas_hot: List[float] = [
+            abs(heat - reference)
+            for heat, reference in zip(heat_probe_hot, reference_probe_hot)
+        ]
+        stdev_delta_hot = stdev(deltas_hot)
+
+        return {
+            "stdev_delta_cold": stdev_delta_cold,
+            "stdev_delta_hot": stdev_delta_hot,
+        }
+
     def start(self) -> None:
         while True:
-            aggregated_movements = self._aggregate_movement()
+            aggregated_movement = self._aggregate_movement()
             self.mqtt_client.publish(
-                "global/movements", payload=json.dumps(aggregated_movements)
+                "global/movement", payload=json.dumps(aggregated_movement)
+            )
+
+            aggregated_temperature = self._aggregate_temperature()
+            self.mqtt_client.publish(
+                "global/temperature", payload=json.dumps(aggregated_temperature)
             )
 
             time.sleep(SLEEP_TIME)

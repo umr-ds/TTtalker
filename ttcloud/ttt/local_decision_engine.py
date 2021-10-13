@@ -66,10 +66,10 @@ class LDE:
 
     def _handle_global_state(self, message: mqtt.MQTTMessage) -> None:
         logging.debug("Received global state message")
-        if "movements" in message.topic:
+        if "movement" in message.topic:
             logging.debug(f"Received aggregated movement data: {message.payload}")
             data: Dict[str, float] = json.loads(message.payload)
-            self.data_policy.aggregated_movements = data
+            self.data_policy.aggregated_movement = data
         else:
             logging.error(f"Unknown topic: {message.topic}")
 
