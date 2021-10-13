@@ -126,6 +126,7 @@ class LocalDataPolicy(Policy):
     def _evaluate_movement(
         self, packet: DataPacket, derivs: Dict[str, List[int]]
     ) -> bool:
+        # FIXME: handle empty dicts
         mean_x = mean(derivs["x"])
         stdev_x = stdev(derivs["x"])
         mean_y = mean(derivs["y"])
@@ -162,56 +163,47 @@ class LocalDataPolicy(Policy):
             packet=packet, means=means
         ) or self._evaluate_movement(packet=packet, derivs=derivs)
 
-    # return: Gesamtabweichung - Grenzwerte müssen festgelegt werden - Tuple: referenzabweichung, vorheizung delta, nachheizung delta
-    # Idee: referenzabweichung am wichtigsten für umgebungswerte, vorheizung delta erkennt ob sensoren defekt, nachheizung delta ob baum tot
-    # timelim sollte 1d, 2d und 5d sein, sollte in evaluate funktion mehrfach aufgerufen werden
-    def _evaluate_temperatures(self, packet: DataPacket) -> Tuple[int, int, int]:
+    def _evaluate_temperature(self, packet: DataPacket) -> bool:
         temperature_reference_0 = compute_temperature(packet.temperature_reference[0])
         temperature_reference_1 = compute_temperature(packet.temperature_reference[1])
         temperature_heat_0 = compute_temperature(packet.temperature_heat[0])
         temperature_heat_1 = compute_temperature(packet.temperature_heat[1])
-        delta_heat_pre = abs(temperature_heat_0 - temperature_reference_0)
-        delta_heat_post = abs(temperature_heat_1 - temperature_reference_1)
-
-        # Welcher Sensor speist "air_temperature"? erstmal weggelassen
+        delta_cold = abs(temperature_heat_0 - temperature_reference_0)
+        delta_hot = abs(temperature_heat_1 - temperature_reference_1)
 
         data: ResultSet = self.influx_client.query(
             f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {analysis_interval}'
         )
 
-        x = 0
-        sum_delta_heat_pre = 0
-        sum_delta_heat_post = 0
-        sum_heat_reference = 0
+        reference_probe_cold: List[float] = []
+        reference_probe_hot: List[float] = []
+        heat_probe_cold: List[float] = []
+        heat_probe_hot: List[float] = []
 
         for datapoint in data.get_points("stem_temperature"):
-            x = x + 1
-            sum_delta_heat_pre = sum_delta_heat_pre + abs(
-                datapoint["ttt_heat_probe_cold"] - datapoint["ttt_reference_probe_cold"]
-            )
-            sum_delta_heat_post = sum_delta_heat_post + abs(
-                datapoint["ttt_heat_probe_hot"] - datapoint["ttt_reference_probe_hot"]
-            )
-            sum_heat_reference = sum_heat_reference + (
-                (
-                    abs(datapoint["ttt_heat_probe_cold"])
-                    + abs(datapoint["ttt_reference_probe_hot"])
-                    + abs(datapoint["ttt_reference_probe_cold"])
-                )
-                / 3
-            )
+            reference_probe_cold.append(datapoint["ttt_reference_probe_cold"])
+            reference_probe_hot.append(datapoint["ttt_reference_probe_hot"])
+            heat_probe_cold.append(datapoint["ttt_heat_probe_cold"])
+            heat_probe_hot.append(datapoint["ttt_heat_probe_hot"])
 
-        abw_referenz = (
-            (
-                abs(temperature_heat_0)
-                + abs(temperature_reference_0)
-                + abs(temperature_reference_1)
-            )
-            / 3
-        ) - (sum_heat_reference / x)
-        abw_delta_heat_pre = delta_heat_pre - (sum_delta_heat_pre / x)
-        abw_delta_heat_post = delta_heat_post - (sum_delta_heat_post / x)
-        return abw_referenz, abw_delta_heat_pre, abw_delta_heat_post
+        deltas_cold: List[float] = [
+            abs(heat - reference)
+            for heat, reference in zip(heat_probe_cold, reference_probe_cold)
+        ]
+        mean_delta_cold = mean(deltas_cold)
+        stdev_delta_cold = stdev(deltas_cold, mean_delta_cold)
+
+        deltas_hot: List[float] = [
+            abs(heat - reference)
+            for heat, reference in zip(heat_probe_hot, reference_probe_hot)
+        ]
+        mean_delta_hot = mean(deltas_hot)
+        stdev_delta_hot = stdev(deltas_hot, mean_delta_hot)
+
+        return (
+            abs(delta_cold - mean_delta_cold) > stdev_delta_cold
+            or abs(delta_hot - mean_delta_hot) > stdev_delta_hot
+        )
 
     def evaluate(
         self, packet: Union[DataPacket, DataPacket2]
