@@ -1,7 +1,6 @@
-import json
 import time
 
-from typing import Tuple, Union, Dict, List
+from typing import Union, Dict, List
 from collections import defaultdict
 from statistics import mean, stdev
 
@@ -14,7 +13,7 @@ from sklearn.linear_model import LinearRegression
 from ttt.packets import (
     TTPacket,
     DataPacket,
-    DataPacket2,
+    LightSensorPacket,
     TTCommand1,
     TTCommand2,
     TTAddress,
@@ -22,8 +21,9 @@ from ttt.packets import (
 from ttt.util import compute_temperature, compute_battery_voltage
 
 
-rde = 1
-analysis_interval = "2d"
+RDE = 1
+ANALYSIS_INTERVAL = "2d"
+SLEEP_TIME_MIN = 60
 
 
 @dataclass
@@ -31,15 +31,14 @@ class Policy:
     local_address: TTAddress
     influx_client: influx.InfluxDBClient
 
-    def evaluate(self, packet: TTPacket) -> Tuple[bool, TTPacket]:
+    def evaluate(self, packet: TTPacket) -> TTPacket:
         """Evaluates the received packet und returns a potential reply packet
 
         Args:
             packet (TTPacket): Packet received by the RCI
 
         Returns:
-            Tuple(bool, TTPacket): Boolean is true if policy detected anomaly, false otherwise.
-                                   TTPacket is potential reply packet that may be sent.
+            TTPacket: Reply packet.
         """
         pass
 
@@ -51,7 +50,7 @@ class LocalDataPolicy(Policy):
         )
 
         data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_voltage" FROM "power" WHERE time > now() - {analysis_interval}'
+            f'SELECT "ttt_voltage" FROM "power" WHERE time > now() - {ANALYSIS_INTERVAL}'
         )
         times = []
         voltages = []
@@ -67,7 +66,6 @@ class LocalDataPolicy(Policy):
 
         reg: LinearRegression = LinearRegression().fit(times, voltages)
 
-        # TODO: discuss: evtl sinnig dies in eine extra funktion auszulagern, jedoch wegen der brisanz des Stromverbrauches mit erhöhter Priorität zu den anderen eingehenden Parametern?
         try:
             measurement_interval = next(
                 self.influx_client.query(
@@ -81,7 +79,7 @@ class LocalDataPolicy(Policy):
 
         measurement_interval = int(
             measurement_interval
-            + (rde * (3700 - reg.predict([[int(time.time()) + (3600 * 48)]])[0]))
+            + (RDE * (3700 - reg.predict([[int(time.time()) + (3600 * 48)]])[0]))
         )
 
         influx_data = [
@@ -98,10 +96,6 @@ class LocalDataPolicy(Policy):
         self.influx_client.write_points(influx_data)
 
         return measurement_interval
-
-    def _evaluate_brightness(self, packet: DataPacket) -> int:
-        # Welche Variable enthält dies?
-        pass
 
     def _evaluate_position(
         self, packet: DataPacket, means: Dict[str, List[int]]
@@ -148,7 +142,7 @@ class LocalDataPolicy(Policy):
         means: Dict[str, List[int]] = defaultdict(list)
         derivs: Dict[str, List[int]] = defaultdict(list)
         data: ResultSet = self.influx_client.query(
-            f'SELECT "x_mean", "x_derivation", "y_mean", "y_derivation", "z_mean", "z_derivation" FROM "gravity" WHERE time > now() - {analysis_interval}'
+            f'SELECT "x_mean", "x_derivation", "y_mean", "y_derivation", "z_mean", "z_derivation" FROM "gravity" WHERE time > now() - {ANALYSIS_INTERVAL}'
         )
 
         for datapoint in data.get_points("gravity"):
@@ -172,7 +166,7 @@ class LocalDataPolicy(Policy):
         delta_hot = abs(temperature_heat_1 - temperature_reference_1)
 
         data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {analysis_interval}'
+            f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {ANALYSIS_INTERVAL}'
         )
 
         reference_probe_cold: List[float] = []
@@ -205,28 +199,34 @@ class LocalDataPolicy(Policy):
             or abs(delta_hot - mean_delta_hot) > stdev_delta_hot
         )
 
-    def evaluate(
-        self, packet: Union[DataPacket, DataPacket2]
-    ) -> Tuple[bool, TTCommand1]:
-        return True, TTCommand1(
+    def evaluate(self, packet: DataPacket) -> TTCommand1:
+        sleep_interval: int = max(self._evaluate_battery(packet=packet), SLEEP_TIME_MIN)
+
+        if self._evaluate_gravity(packet=packet) or self._evaluate_temperature(
+            packet=packet
+        ):
+            sleep_interval = SLEEP_TIME_MIN
+
+        heating = int(sleep_interval / 6)
+
+        return TTCommand1(
             receiver_address=packet.sender_address,
             sender_address=self.local_address,
             command=32,
             time=int(time.time()),
-            sleep_intervall=120,
+            sleep_interval=sleep_interval,
             unknown=(0, 45, 1),
-            heating=30,
+            heating=heating,
         )
 
 
-class AggregatedDataPolicy(Policy):
-    def evaluate(self, packet: DataPacket2) -> Tuple[bool, TTCommand1]:
+class LocalLightPolicy(Policy):
+    def _evaluate_brightness(self, packet: LightSensorPacket) -> int:
+        # Welche Variable enthält dies?
         pass
 
-
-class LocalLightPolicy(Policy):
-    def evaluate(self, packet: DataPacket2) -> Tuple[bool, TTCommand2]:
-        return True, TTCommand2(
+    def evaluate(self, packet: LightSensorPacket) -> TTCommand2:
+        return TTCommand2(
             receiver_address=packet.sender_address,
             sender_address=self.local_address,
             command=33,

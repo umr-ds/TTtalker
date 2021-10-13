@@ -24,22 +24,16 @@ class LDE:
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
         self.mqtt_client.subscribe("receive/#")
-        self.mqtt_client.subscribe("policy/#")
 
         self.influx_client = influx.InfluxDBClient(host=influx_address, port=8086)
 
-        local_data_policy = LocalDataPolicy(
+        self.data_policy = LocalDataPolicy(
             local_address=address, influx_client=self.influx_client
         )
 
-        self.local_policies: Dict[str, Policy] = {
-            "DataPacket": local_data_policy,
-            "DataPacket2": local_data_policy,
-            "LightSensorPacket": LocalLightPolicy(
-                local_address=address, influx_client=self.influx_client
-            ),
-        }
-        self.aggregate_policies: Dict[str, Policy] = {}
+        self.light_policy = LocalLightPolicy(
+            local_address=address, influx_client=self.influx_client
+        )
 
     def __enter__(self) -> LDE:
         self.mqtt_client.loop_start()
@@ -63,8 +57,6 @@ class LDE:
 
         if "receive" in message.topic:
             self._handle_packet(message)
-        elif "policy" in message.topic:
-            self._handle_policy(message)
         else:
             logging.error(f"Received message from unknown topic {message.topic}")
 
@@ -74,19 +66,16 @@ class LDE:
 
         if isinstance(packet, TTHeloPacket):
             reply = self._on_helo(packet=packet)
-        elif isinstance(packet, DataPacket) or isinstance(packet, DataPacket2):
+        elif isinstance(packet, DataPacket):
             reply = self._on_data(packet=packet)
         elif isinstance(packet, LightSensorPacket):
             reply = self._on_light(packet=packet)
         else:
-            logging.error("Unknown packet type")
+            logging.error("Unsupported packet type")
             return
 
         logging.debug(f"Reply: {reply}")
         self.mqtt_client.publish(topic="command", payload=b64encode(reply.marshall()))
-
-    def _handle_policy(self, message: mqtt.MQTTMessage) -> None:
-        pass
 
     def _on_helo(self, packet: TTHeloPacket) -> TTCloudHeloPacket:
         return TTCloudHeloPacket(
@@ -96,13 +85,8 @@ class LDE:
             time=int(time.time()),
         )
 
-    def _on_data(self, packet: Union[DataPacket, DataPacket2]) -> TTPacket:
-        anomaly, reply = self.local_policies[packet.__class__.__name__].evaluate(packet)
-
-        if not anomaly:
-            _, reply = self.aggregate_policies[packet.__class__.__name__].evaluate(
-                packet
-            )
+    def _on_data(self, packet: DataPacket) -> TTPacket:
+        reply = self.data_policy.evaluate(packet)
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")
@@ -111,7 +95,7 @@ class LDE:
         return reply
 
     def _on_light(self, packet: LightSensorPacket) -> TTPacket:
-        _, reply = self.local_policies[packet.__class__.__name__].evaluate(packet)
+        reply = self.light_policy.evaluate(packet)
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")

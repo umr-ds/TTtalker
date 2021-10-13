@@ -556,7 +556,7 @@ class LightSensorPacket(TTPacket):
 class TTCommand1(TTPacket):
     command: int
     time: int
-    sleep_intervall: int
+    sleep_interval: int
     unknown: Tuple[int, int, int]
     heating: int
     packet_type: int = 66
@@ -574,7 +574,7 @@ class TTCommand1(TTPacket):
             sender_address=sender_address,
             command=fields[0],
             time=fields[1],
-            sleep_intervall=fields[2],
+            sleep_interval=fields[2],
             heating=fields[4],
             unknown=(fields[3], fields[5], fields[6]),
         )
@@ -587,7 +587,7 @@ class TTCommand1(TTPacket):
             self.packet_type,
             self.command,
             self.time,
-            self.sleep_intervall,
+            self.sleep_interval,
             self.unknown[0],
             self.heating,
             self.unknown[1],
