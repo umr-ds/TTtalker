@@ -1,3 +1,4 @@
+import logging
 import time
 
 from typing import Union, Dict, List
@@ -43,14 +44,16 @@ class Policy:
         pass
 
 
-class LocalDataPolicy(Policy):
+class DataPolicy(Policy):
+    aggregated_movements: Dict[str, float]
+
     def _evaluate_battery(self, packet: DataPacket) -> int:
         battery_voltage = compute_battery_voltage(
             adc_volt_bat=packet.adc_volt_bat, adc_bandgap=packet.adc_bandgap
         )
 
         data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_voltage" FROM "power" WHERE time > now() - {ANALYSIS_INTERVAL}'
+            f'SELECT "ttt_voltage" FROM "power" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
         )
         times = []
         voltages = []
@@ -117,45 +120,38 @@ class LocalDataPolicy(Policy):
             or abs(z - mean_z) > stdev_z
         )
 
-    def _evaluate_movement(
-        self, packet: DataPacket, derivs: Dict[str, List[int]]
-    ) -> bool:
-        # FIXME: handle empty dicts
-        mean_x = mean(derivs["x"])
-        stdev_x = stdev(derivs["x"])
-        mean_y = mean(derivs["y"])
-        stdev_y = stdev(derivs["y"])
-        mean_z = mean(derivs["z"])
-        stdev_z = stdev(derivs["z"])
+    def _evaluate_movement(self, packet: DataPacket) -> bool:
+        if not self.aggregated_movements:
+            logging.info("Haven't received any aggregated movement data yet.")
+            return False
 
         x = packet.gravity_x_derivation
         y = packet.gravity_y_derivation
         z = packet.gravity_z_derivation
 
         return (
-            abs(x - mean_x) > stdev_x
-            or abs(y - mean_y) > stdev_y
-            or abs(z - mean_z) > stdev_z
+            abs(x - self.aggregated_movements["mean_x"])
+            > self.aggregated_movements["stdev_x"]
+            or abs(y - self.aggregated_movements["mean_y"])
+            > self.aggregated_movements["stdev_y"]
+            or abs(z - self.aggregated_movements["mean_z"])
+            > self.aggregated_movements["stdev_z"]
         )
 
     def _evaluate_gravity(self, packet: DataPacket) -> int:
         means: Dict[str, List[int]] = defaultdict(list)
-        derivs: Dict[str, List[int]] = defaultdict(list)
         data: ResultSet = self.influx_client.query(
-            f'SELECT "x_mean", "x_derivation", "y_mean", "y_derivation", "z_mean", "z_derivation" FROM "gravity" WHERE time > now() - {ANALYSIS_INTERVAL}'
+            f'SELECT "x_mean", "y_mean", "z_mean" FROM "gravity" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
         )
 
         for datapoint in data.get_points("gravity"):
             means["x"].append(datapoint["x_mean"])
-            derivs["x"].append(datapoint["x_derivation"])
             means["y"].append(datapoint["y_mean"])
-            derivs["y"].append(datapoint["y_derivation"])
             means["z"].append(datapoint["z_mean"])
-            derivs["z"].append(datapoint["z_derivation"])
 
         return self._evaluate_position(
             packet=packet, means=means
-        ) or self._evaluate_movement(packet=packet, derivs=derivs)
+        ) or self._evaluate_movement(packet=packet)
 
     def _evaluate_temperature(self, packet: DataPacket) -> bool:
         temperature_reference_0 = compute_temperature(packet.temperature_reference[0])
@@ -166,7 +162,7 @@ class LocalDataPolicy(Policy):
         delta_hot = abs(temperature_heat_1 - temperature_reference_1)
 
         data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {ANALYSIS_INTERVAL}'
+            f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
         )
 
         reference_probe_cold: List[float] = []
@@ -220,7 +216,7 @@ class LocalDataPolicy(Policy):
         )
 
 
-class LocalLightPolicy(Policy):
+class LightPolicy(Policy):
     def _evaluate_brightness(self, packet: LightSensorPacket) -> int:
         # Welche Variable enthält dies?
         pass

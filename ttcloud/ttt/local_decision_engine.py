@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import logging
 import time
+import json
 
 from typing import Any, Dict, Callable, Union
 from base64 import b64encode, b64decode
@@ -13,7 +14,7 @@ from paho.mqtt.packettypes import PacketTypes
 import influxdb as influx
 
 from ttt.packets import *
-from ttt.policy import Policy, LocalDataPolicy, LocalLightPolicy
+from ttt.policy import Policy, DataPolicy, LightPolicy
 
 
 class LDE:
@@ -24,14 +25,15 @@ class LDE:
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
         self.mqtt_client.subscribe("receive/#")
+        self.mqtt_client.subscribe("global/#")
 
         self.influx_client = influx.InfluxDBClient(host=influx_address, port=8086)
 
-        self.data_policy = LocalDataPolicy(
+        self.data_policy = DataPolicy(
             local_address=address, influx_client=self.influx_client
         )
 
-        self.light_policy = LocalLightPolicy(
+        self.light_policy = LightPolicy(
             local_address=address, influx_client=self.influx_client
         )
 
@@ -57,10 +59,23 @@ class LDE:
 
         if "receive" in message.topic:
             self._handle_packet(message)
+        if "global" in message.topic:
+            self._handle_global_state(message)
         else:
             logging.error(f"Received message from unknown topic {message.topic}")
 
+    def _handle_global_state(self, message: mqtt.MQTTMessage) -> None:
+        logging.debug("Received global state message")
+        if "movements" in message.topic:
+            logging.debug(f"Received aggregated movement data: {message.payload}")
+            data: Dict[str, float] = json.loads(message.payload)
+            self.data_policy.aggregated_movements = data
+        else:
+            logging.error(f"Unknown topic: {message.topic}")
+
     def _handle_packet(self, message: mqtt.MQTTMessage) -> None:
+        logging.debug("Received packet message")
+
         packet: TTPacket = unmarshall(b64decode(message.payload))
         logging.debug(f"Unamarshalled packet: {packet}")
 

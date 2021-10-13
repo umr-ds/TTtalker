@@ -1,0 +1,117 @@
+#! /usr/bin/env python3
+"""
+This program aggregates data from all treetalkertalkertalkertalkertalkers to find similarities across stations
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import time
+import json
+
+from typing import Dict, List
+from statistics import mean, stdev
+
+import paho.mqtt.client as mqtt
+from paho.mqtt.packettypes import PacketTypes
+import influxdb as influx
+from influxdb.resultset import ResultSet
+
+from ttt.policy import ANALYSIS_INTERVAL
+
+
+SLEEP_TIME = 600
+
+
+class Aggregator:
+    def __init__(
+        self, broker_address: str, broker_port: int, influx_address: str
+    ) -> None:
+        self.mqtt_client = mqtt.Client(client_id="aggregator", protocol=mqtt.MQTTv5)
+        self.mqtt_client.connect(host=broker_address, port=broker_port)
+
+        self.influx_client = influx.InfluxDBClient(host=influx_address, port=8086)
+
+    def __enter__(self) -> Aggregator:
+        self.mqtt_client.loop_start()
+        self.influx_client.create_database("ttt")
+        self.influx_client.switch_database("ttt")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.mqtt_client.loop_stop()
+        self.mqtt_client.disconnect(
+            reasoncode=mqtt.ReasonCodes(
+                packetType=PacketTypes.DISCONNECT, aName="Normal disconnection"
+            )
+        )
+        self.influx_client.close()
+
+    def _aggregate_movement(self) -> Dict[str, float]:
+        x_derivs: List[int] = []
+        y_derivs: List[int] = []
+        z_derivs: List[int] = []
+        data: ResultSet = self.influx_client.query(
+            f'SELECT "x_derivation", "y_derivation", "z_derivation" FROM "gravity" WHERE time > now() - {ANALYSIS_INTERVAL}'
+        )
+
+        for datapoint in data.get_points("gravity"):
+            x_derivs.append(datapoint["x_derivation"])
+            y_derivs.append(datapoint["y_derivation"])
+            z_derivs.append(datapoint["z_derivation"])
+
+        mean_x = mean(x_derivs)
+        stdev_x = stdev(x_derivs, mean_x)
+        mean_y = mean(y_derivs)
+        stdev_y = stdev(y_derivs, mean_y)
+        mean_z = mean(z_derivs)
+        stdev_z = stdev(z_derivs, mean_z)
+
+        return {
+            "mean_x": mean_x,
+            "stdev_x": stdev_x,
+            "mean_y": mean_y,
+            "stdev_y": stdev_y,
+            "mean_z": mean_z,
+            "stdev_z": stdev_z,
+        }
+
+    def start(self) -> None:
+        while True:
+            aggregated_movements = self._aggregate_movement()
+            self.mqtt_client.publish(
+                "global/movements", payload=json.dumps(aggregated_movements)
+            )
+
+            time.sleep(SLEEP_TIME)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process some integers.")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument(
+        "-b", "--broker", help="Address of the MQTT broker", default="localhost"
+    )
+    parser.add_argument(
+        "-i", "--influx", help="Address of the influxdb", default="localhost"
+    )
+    args = parser.parse_args()
+
+    if args.verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s %(levelname)-8s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    with Aggregator(
+        broker_address=args.broker,
+        broker_port=args.broker_port,
+        influx_address=args.influx,
+    ) as aggregator:
+        aggregator.start()
