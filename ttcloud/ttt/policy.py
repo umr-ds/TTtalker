@@ -29,6 +29,7 @@ from ttt.util import (
 RDE = 1
 ANALYSIS_INTERVAL = "2d"
 SLEEP_TIME_MIN = 60
+SLEEP_TIME_DEFAULT = 600
 
 
 @dataclass
@@ -67,24 +68,31 @@ class DataPolicy:
             times.append([timestamp])
             voltages.append(datapoint["ttt_voltage"])
 
+        if not times or not voltages:
+            logging.debug(
+                f"No data to compute regression: [times: {times}, voltages: {voltages}]"
+            )
+            return SLEEP_TIME_DEFAULT
+
         times.append([int(time.time())])
         voltages.append(battery_voltage)
 
         reg: LinearRegression = LinearRegression().fit(times, voltages)
 
         try:
-            measurement_interval = next(
+            sleep_time = next(
                 self.influx_client.query(
-                    f'SELECT last("measurement_interval") FROM "measurement_interval" WHERE treealker = {sender_address}'
+                    f'SELECT last("sleep_time") FROM "sleep_time" WHERE treealker = {sender_address}'
                 ).get_points("power")
             )[
                 "last"
             ]  # I hate this monstrosity and I hate influx for making me do this...
         except StopIteration:
-            measurement_interval = 3600
+            logging.debug("No previous sleep time present")
+            sleep_time = SLEEP_TIME_DEFAULT
 
-        measurement_interval = int(
-            measurement_interval
+        sleep_time = int(
+            sleep_time
             + (RDE * (3700 - reg.predict([[int(time.time()) + (3600 * 48)]])[0]))
         )
 
@@ -95,13 +103,13 @@ class DataPolicy:
                     "treetalker": sender_address,
                 },
                 "fields": {
-                    "measurement_interval": measurement_interval,
+                    "measurement_interval": sleep_time,
                 },
             },
         ]
         self.influx_client.write_points(influx_data)
 
-        return measurement_interval
+        return sleep_time
 
     def _evaluate_position(
         self, packet: DataPacketRev32, means: Dict[str, List[int]]
@@ -152,6 +160,10 @@ class DataPolicy:
             means["y"].append(datapoint["y_mean"])
             means["z"].append(datapoint["z_mean"])
 
+        if not means:
+            logging.debug("No historical gravity data present.")
+            return False
+
         return self._evaluate_position(
             packet=packet, means=means
         ) or self._evaluate_movement(packet=packet)
@@ -186,6 +198,17 @@ class DataPolicy:
             reference_probe_hot.append(datapoint["ttt_reference_probe_hot"])
             heat_probe_cold.append(datapoint["ttt_heat_probe_cold"])
             heat_probe_hot.append(datapoint["ttt_heat_probe_hot"])
+
+        if (
+            not reference_probe_cold
+            or not reference_probe_hot
+            or not heat_probe_cold
+            or not heat_probe_hot
+        ):
+            logging.debug(
+                f"No historical temperature data present: [reference_probe_cold: {reference_probe_cold}, reference_probe_hot: {reference_probe_hot}, heat_probe_cold: {heat_probe_cold}, heat_probe_hot: {heat_probe_hot}]"
+            )
+            return False
 
         deltas_cold: List[float] = [
             abs(heat - reference)

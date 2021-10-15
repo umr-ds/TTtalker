@@ -62,7 +62,7 @@ class LDE:
 
         if "receive" in message.topic:
             self._handle_packet(message)
-        if "global" in message.topic:
+        elif "global" in message.topic:
             self._handle_global_state(message)
         else:
             logging.error(f"Received message from unknown topic {message.topic}")
