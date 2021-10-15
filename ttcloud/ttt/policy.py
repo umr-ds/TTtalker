@@ -12,14 +12,18 @@ from influxdb.resultset import ResultSet
 from sklearn.linear_model import LinearRegression
 
 from ttt.packets import (
-    TTPacket,
-    DataPacket,
+    DataPacketRev31,
+    DataPacketRev32,
     LightSensorPacket,
     TTCommand1,
     TTCommand2,
     TTAddress,
 )
-from ttt.util import compute_temperature, compute_battery_voltage
+from ttt.util import (
+    compute_temperature,
+    compute_battery_voltage_rev_3_1,
+    compute_battery_voltage_rev_3_2,
+)
 
 
 RDE = 1
@@ -28,33 +32,31 @@ SLEEP_TIME_MIN = 60
 
 
 @dataclass
-class Policy:
+class DataPolicy:
     local_address: TTAddress
     influx_client: influx.InfluxDBClient
-
-    def evaluate(self, packet: TTPacket) -> TTPacket:
-        """Evaluates the received packet und returns a potential reply packet
-
-        Args:
-            packet (TTPacket): Packet received by the RCI
-
-        Returns:
-            TTPacket: Reply packet.
-        """
-        pass
-
-
-class DataPolicy(Policy):
     aggregated_movement: Dict[str, float]
     aggregated_temperature: Dict[str, float]
 
-    def _evaluate_battery(self, packet: DataPacket) -> int:
-        battery_voltage = compute_battery_voltage(
+    def _evaluate_battery_3_2(self, packet: DataPacketRev32) -> int:
+        battery_voltage = compute_battery_voltage_rev_3_2(
             adc_volt_bat=packet.adc_volt_bat, adc_bandgap=packet.adc_bandgap
         )
+        return self._evaluate_battery(
+            sender_address=packet.sender_address.address,
+            battery_voltage=battery_voltage,
+        )
 
+    def _evaluate_battery_3_1(self, packet: DataPacketRev31) -> int:
+        battery_voltage = compute_battery_voltage_rev_3_1(voltage=packet.voltage)
+        return self._evaluate_battery(
+            sender_address=packet.sender_address.address,
+            battery_voltage=battery_voltage,
+        )
+
+    def _evaluate_battery(self, sender_address: int, battery_voltage: float) -> int:
         data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_voltage" FROM "power" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
+            f'SELECT "ttt_voltage" FROM "power" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {sender_address}'
         )
         times = []
         voltages = []
@@ -73,7 +75,7 @@ class DataPolicy(Policy):
         try:
             measurement_interval = next(
                 self.influx_client.query(
-                    f'SELECT last("measurement_interval") FROM "measurement_interval" WHERE treealker = {packet.sender_address.address}'
+                    f'SELECT last("measurement_interval") FROM "measurement_interval" WHERE treealker = {sender_address}'
                 ).get_points("power")
             )[
                 "last"
@@ -90,7 +92,7 @@ class DataPolicy(Policy):
             {
                 "measurement": "measurement_interval",
                 "tags": {
-                    "treetalker": packet.sender_address.address,
+                    "treetalker": sender_address,
                 },
                 "fields": {
                     "measurement_interval": measurement_interval,
@@ -102,7 +104,7 @@ class DataPolicy(Policy):
         return measurement_interval
 
     def _evaluate_position(
-        self, packet: DataPacket, means: Dict[str, List[int]]
+        self, packet: DataPacketRev32, means: Dict[str, List[int]]
     ) -> bool:
         mean_x = mean(means["x"])
         stdev_x = stdev(means["x"])
@@ -121,7 +123,7 @@ class DataPolicy(Policy):
             or abs(z - mean_z) > stdev_z
         )
 
-    def _evaluate_movement(self, packet: DataPacket) -> bool:
+    def _evaluate_movement(self, packet: DataPacketRev32) -> bool:
         if not self.aggregated_movement:
             logging.info("Haven't received any aggregated movement data yet.")
             return False
@@ -139,7 +141,7 @@ class DataPolicy(Policy):
             > self.aggregated_movement["stdev_z"]
         )
 
-    def _evaluate_gravity(self, packet: DataPacket) -> int:
+    def _evaluate_gravity(self, packet: Union[DataPacketRev31, DataPacketRev32]) -> int:
         means: Dict[str, List[int]] = defaultdict(list)
         data: ResultSet = self.influx_client.query(
             f'SELECT "x_mean", "y_mean", "z_mean" FROM "gravity" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
@@ -154,7 +156,9 @@ class DataPolicy(Policy):
             packet=packet, means=means
         ) or self._evaluate_movement(packet=packet)
 
-    def _evaluate_temperature(self, packet: DataPacket) -> bool:
+    def _evaluate_temperature(
+        self, packet: Union[DataPacketRev31, DataPacketRev32]
+    ) -> bool:
         if not self.aggregated_movement:
             logging.info("Haven't received any aggregated temperature data yet.")
             return False
@@ -202,8 +206,32 @@ class DataPolicy(Policy):
             > self.aggregated_temperature["stdev_delta_hot"]
         )
 
-    def evaluate(self, packet: DataPacket) -> TTCommand1:
-        sleep_interval: int = max(self._evaluate_battery(packet=packet), SLEEP_TIME_MIN)
+    def evaluate_3_2(self, packet: DataPacketRev32) -> TTCommand1:
+        sleep_interval: int = max(
+            self._evaluate_battery_3_2(packet=packet), SLEEP_TIME_MIN
+        )
+
+        if self._evaluate_gravity(packet=packet) or self._evaluate_temperature(
+            packet=packet
+        ):
+            sleep_interval = SLEEP_TIME_MIN
+
+        heating = int(sleep_interval / 6)
+
+        return TTCommand1(
+            receiver_address=packet.sender_address,
+            sender_address=self.local_address,
+            command=32,
+            time=int(time.time()),
+            sleep_interval=sleep_interval,
+            unknown=(0, 45, 1),
+            heating=heating,
+        )
+
+    def evaluate_3_1(self, packet: DataPacketRev31) -> TTCommand1:
+        sleep_interval: int = max(
+            self._evaluate_battery_3_1(packet=packet), SLEEP_TIME_MIN
+        )
 
         if self._evaluate_gravity(packet=packet) or self._evaluate_temperature(
             packet=packet
@@ -223,7 +251,11 @@ class DataPolicy(Policy):
         )
 
 
-class LightPolicy(Policy):
+@dataclass
+class LightPolicy:
+    local_address: TTAddress
+    influx_client: influx.InfluxDBClient
+
     def _evaluate_brightness(self, packet: LightSensorPacket) -> int:
         # Welche Variable enthält dies?
         pass

@@ -14,7 +14,7 @@ from paho.mqtt.packettypes import PacketTypes
 import influxdb as influx
 
 from ttt.packets import *
-from ttt.policy import Policy, DataPolicy, LightPolicy
+from ttt.policy import DataPolicy, LightPolicy
 
 
 class LDE:
@@ -30,7 +30,10 @@ class LDE:
         self.influx_client = influx.InfluxDBClient(host=influx_address, port=8086)
 
         self.data_policy = DataPolicy(
-            local_address=address, influx_client=self.influx_client
+            local_address=address,
+            influx_client=self.influx_client,
+            aggregated_movement={},
+            aggregated_temperature={},
         )
 
         self.light_policy = LightPolicy(
@@ -81,8 +84,10 @@ class LDE:
 
         if isinstance(packet, TTHeloPacket):
             reply = self._on_helo(packet=packet)
-        elif isinstance(packet, DataPacket):
-            reply = self._on_data(packet=packet)
+        elif isinstance(packet, DataPacketRev31):
+            reply = self._on_data_rev_3_1(packet=packet)
+        elif isinstance(packet, DataPacketRev32):
+            reply = self._on_data_rev_3_2(packet=packet)
         elif isinstance(packet, LightSensorPacket):
             reply = self._on_light(packet=packet)
         else:
@@ -100,8 +105,17 @@ class LDE:
             time=int(time.time()),
         )
 
-    def _on_data(self, packet: DataPacket) -> TTPacket:
-        reply = self.data_policy.evaluate(packet)
+    def _on_data_rev_3_2(self, packet: DataPacketRev32) -> TTPacket:
+        reply = self.data_policy.evaluate_3_2(packet)
+
+        packet_data = packet.to_influx_json()
+        logging.debug(f"Sending data to influx: {packet_data}")
+        self.influx_client.write_points(packet_data)
+
+        return reply
+
+    def _on_data_rev_3_1(self, packet: DataPacketRev31) -> TTPacket:
+        reply = self.data_policy.evaluate_3_1(packet)
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")

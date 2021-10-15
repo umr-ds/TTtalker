@@ -13,5 +13,9 @@ def compute_temperature(measurement: int) -> float:
     )
 
 
-def compute_battery_voltage(adc_volt_bat: int, adc_bandgap: int) -> float:
+def compute_battery_voltage_rev_3_2(adc_volt_bat: int, adc_bandgap: int) -> float:
     return 2 * mV_BANDGAP * (float(adc_volt_bat) / float(adc_bandgap))
+
+
+def compute_battery_voltage_rev_3_1(voltage: int) -> float:
+    return 650 + (131072 * (1100 / voltage))

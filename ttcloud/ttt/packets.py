@@ -3,7 +3,11 @@ from dataclasses import dataclass
 from io import BytesIO
 from struct import unpack, pack
 from typing import Dict, Callable, Tuple, List, Any
-from util import compute_battery_voltage, compute_temperature
+from util import (
+    compute_battery_voltage_rev_3_2,
+    compute_battery_voltage_rev_3_1,
+    compute_temperature,
+)
 
 
 @dataclass
@@ -102,9 +106,9 @@ class TTCloudHeloPacket(TTPacket):
 
 
 @dataclass
-class DataPacket(TTPacket):
+class DataPacketRev32(TTPacket):
     packet_number: int
-    time: int
+    timestamp: int
     growth_sensor: int
     adc_bandgap: int
     number_of_bits: int
@@ -123,15 +127,15 @@ class DataPacket(TTPacket):
     packet_type: int = 77
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, DataPacket) and self.__dict__ == other.__dict__
+        return isinstance(other, DataPacketRev32) and self.__dict__ == other.__dict__
 
     @classmethod
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
-    ) -> DataPacket:
+    ) -> DataPacketRev32:
         fields = unpack("=BIIIIIBBhhhhhhhIIHI", raw_stream.read())
         packet_number: int = fields[0]
-        time: int = fields[1]
+        timestamp: int = fields[1]
         t_ref_0: int = fields[2]
         t_heat_0: int = fields[3]
         growth_sensor: int = fields[4]
@@ -156,7 +160,7 @@ class DataPacket(TTPacket):
             receiver_address=receiver_address,
             sender_address=sender_address,
             packet_number=packet_number,
-            time=time,
+            timestamp=timestamp,
             growth_sensor=growth_sensor,
             adc_bandgap=adc_bandgap,
             number_of_bits=number_of_bits,
@@ -181,7 +185,7 @@ class DataPacket(TTPacket):
             self.sender_address.address,
             self.packet_type,
             self.packet_number,
-            self.time,
+            self.timestamp,
             self.temperature_reference[0],
             self.temperature_heat[0],
             self.growth_sensor,
@@ -243,7 +247,7 @@ class DataPacket(TTPacket):
                 "fields": {
                     "bandgap": self.adc_bandgap,
                     "voltage": self.adc_volt_bat,
-                    "ttt_voltage": compute_battery_voltage(
+                    "ttt_voltage": compute_battery_voltage_rev_3_2(
                         adc_volt_bat=self.adc_volt_bat, adc_bandgap=self.adc_bandgap
                     ),
                 },
@@ -285,11 +289,13 @@ class DataPacket(TTPacket):
 
 
 @dataclass
-class DataPacket2(TTPacket):
+class DataPacketRev31(TTPacket):
     packet_number: int
-    time: int
+    timestamp: int
+    temperature_reference_cold: int
+    temperature_heat_cold: int
     growth_sensor: int
-    adc_bandgap: int
+    voltage: int
     number_of_bits: int
     air_relative_humidity: int
     air_temperature: int
@@ -299,26 +305,25 @@ class DataPacket2(TTPacket):
     gravity_y_derivation: int
     gravity_x_mean: int
     gravity_x_derivation: int
-    StWC: int
-    adc_volt_bat: int
-    temperature_reference: int
-    temperature_heat: int
+    temperature_reference_hot: int
+    temperature_heat_hot: int
+    moisture: int
     packet_type: int = 69
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, DataPacket2) and self.__dict__ == other.__dict__
+        return isinstance(other, DataPacketRev31) and self.__dict__ == other.__dict__
 
     @classmethod
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
-    ) -> DataPacket2:
-        fields = unpack("=BIIIHHBBhhhhhhhHI", raw_stream.read())
+    ) -> DataPacketRev31:
+        fields = unpack("=BIhhIIBBhhhhhhhhhh", raw_stream.read())
         packet_number: int = fields[0]
-        time: int = fields[1]
-        temperature_reference: int = fields[2]
-        temperature_heat: int = fields[3]
+        timestamp: int = fields[1]
+        temperature_reference_cold: int = fields[2]
+        temperature_heat_cold: int = fields[3]
         growth_sensor: int = fields[4]
-        adc_bandgap: int = fields[5]
+        voltage: int = fields[5]
         number_of_bits: int = fields[6]
         air_relative_humidity: int = fields[7]
         air_temperature: int = fields[8]
@@ -328,16 +333,19 @@ class DataPacket2(TTPacket):
         gravity_y_derivation: int = fields[12]
         gravity_x_mean: int = fields[13]
         gravity_x_derivation: int = fields[14]
-        StWC: int = fields[15]
-        adc_volt_bat: int = fields[16]
+        temperature_reference_hot: int = fields[15]
+        temperature_heat_hot: int = fields[16]
+        moisture: int = fields[17]
 
         return cls(
             receiver_address=receiver_address,
             sender_address=sender_address,
             packet_number=packet_number,
-            time=time,
+            timestamp=timestamp,
+            temperature_reference_cold=temperature_reference_cold,
+            temperature_heat_cold=temperature_heat_cold,
             growth_sensor=growth_sensor,
-            adc_bandgap=adc_bandgap,
+            voltage=voltage,
             number_of_bits=number_of_bits,
             air_relative_humidity=air_relative_humidity,
             air_temperature=air_temperature,
@@ -347,24 +355,23 @@ class DataPacket2(TTPacket):
             gravity_y_derivation=gravity_y_derivation,
             gravity_x_mean=gravity_x_mean,
             gravity_x_derivation=gravity_x_derivation,
-            StWC=StWC,
-            adc_volt_bat=adc_volt_bat,
-            temperature_reference=temperature_reference,
-            temperature_heat=temperature_heat,
+            temperature_reference_hot=temperature_reference_hot,
+            temperature_heat_hot=temperature_heat_hot,
+            moisture=moisture,
         )
 
     def marshall(self) -> bytes:
         return pack(
-            "=IIBBIIIHHBBhhhhhhhHI",
+            "=IIBBIhhIIBBhhhhhhhhhh",
             self.receiver_address.address,
             self.sender_address.address,
             self.packet_type,
             self.packet_number,
-            self.time,
-            self.temperature_reference,
-            self.temperature_heat,
+            self.timestamp,
+            self.temperature_reference_cold,
+            self.temperature_heat_cold,
             self.growth_sensor,
-            self.adc_bandgap,
+            self.voltage,
             self.number_of_bits,
             self.air_relative_humidity,
             self.air_temperature,
@@ -374,8 +381,9 @@ class DataPacket2(TTPacket):
             self.gravity_y_derivation,
             self.gravity_x_mean,
             self.gravity_x_derivation,
-            self.StWC,
-            self.adc_volt_bat,
+            self.temperature_reference_hot,
+            self.temperature_heat_hot,
+            self.moisture,
         )
 
     def to_influx_json(self) -> List[Dict[str, Any]]:
@@ -387,10 +395,22 @@ class DataPacket2(TTPacket):
                     "heating": False,
                 },
                 "fields": {
-                    "reference_probe_cold": self.temperature_reference,
-                    "reference_probe_hot": self.temperature_reference,
-                    "heat_probe_cold": self.temperature_heat,
-                    "heat_probe_hot": self.temperature_heat,
+                    "reference_probe_cold": self.temperature_reference_cold,
+                    "reference_probe_hot": self.temperature_reference_hot,
+                    "heat_probe_cold": self.temperature_heat_cold,
+                    "heat_probe_hot": self.temperature_heat_hot,
+                    "ttt_reference_probe_cold": compute_temperature(
+                        self.temperature_reference_cold
+                    ),
+                    "ttt_reference_probe_hot": compute_temperature(
+                        self.temperature_reference_hot
+                    ),
+                    "ttt_heat_probe_cold": compute_temperature(
+                        self.temperature_heat_cold
+                    ),
+                    "ttt_heat_probe_hot": compute_temperature(
+                        self.temperature_heat_hot
+                    ),
                 },
             },
             {
@@ -408,8 +428,10 @@ class DataPacket2(TTPacket):
                     "treetalker": self.sender_address.address,
                 },
                 "fields": {
-                    "bandgap": self.adc_bandgap,
-                    "voltage": self.adc_volt_bat,
+                    "voltage": self.voltage,
+                    "ttt_voltage": compute_battery_voltage_rev_3_1(
+                        voltage=self.voltage
+                    ),
                 },
             },
             {
@@ -418,7 +440,7 @@ class DataPacket2(TTPacket):
                     "treetalker": self.sender_address.address,
                 },
                 "fields": {
-                    "content": self.StWC,
+                    "xmc": self.moisture,
                 },
             },
             {
@@ -451,7 +473,7 @@ class DataPacket2(TTPacket):
 @dataclass
 class LightSensorPacket(TTPacket):
     packet_number: int
-    time: int
+    timestamp: int
     AS7263: Dict[int, float]
     AS7262: Dict[int, float]
     integration_time: int
@@ -470,7 +492,7 @@ class LightSensorPacket(TTPacket):
             receiver_address=receiver_address,
             sender_address=sender_address,
             packet_number=fields[0],
-            time=fields[1],
+            timestamp=fields[1],
             AS7263={
                 610: fields[2],
                 680: fields[3],
@@ -498,7 +520,7 @@ class LightSensorPacket(TTPacket):
             self.sender_address.address,
             self.packet_type,
             self.packet_number,
-            self.time,
+            self.timestamp,
             self.AS7263[610],
             self.AS7263[680],
             self.AS7263[730],
@@ -637,10 +659,10 @@ PACKET_TYPES: Dict[int, Callable[[TTAddress, TTAddress, BytesIO], TTPacket]] = {
     5: TTHeloPacket.unmarshall,
     65: TTCloudHeloPacket.unmarshall,
     66: TTCommand1.unmarshall,
-    69: DataPacket2.unmarshall,
+    69: DataPacketRev31.unmarshall,
     73: LightSensorPacket.unmarshall,
     74: TTCommand2.unmarshall,
-    77: DataPacket.unmarshall,
+    77: DataPacketRev32.unmarshall,
 }
 
 
@@ -687,11 +709,11 @@ SAMPLE_PACKETS: Dict[str, TTPacket] = {
         command=190,
         time=1615386706,
     ),
-    "DataPacket": DataPacket(
+    "DataPacket": DataPacketRev32(
         receiver_address=TTAddress(3254976792),
         sender_address=TTAddress(1375928658),
         packet_number=1,
-        time=14400,
+        timestamp=14400,
         temperature_reference=(34167, 34168),
         temperature_heat=(34298, 22018),
         growth_sensor=47212,
@@ -712,7 +734,7 @@ SAMPLE_PACKETS: Dict[str, TTPacket] = {
         receiver_address=TTAddress(3254976792),
         sender_address=TTAddress(1375928658),
         packet_number=2,
-        time=14400,
+        timestamp=14400,
         AS7263={
             610: 18.378816604614258,
             680: 27.292129516601562,
@@ -737,7 +759,7 @@ SAMPLE_PACKETS: Dict[str, TTPacket] = {
         sender_address=TTAddress(3254976792),
         command=24,
         time=1615386764,
-        sleep_intervall=3600,
+        sleep_interval=3600,
         heating=600,
         unknown=(0, 45, 2),
     ),

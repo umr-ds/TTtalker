@@ -15,7 +15,7 @@ from ttt.packets import (
     unmarshall,
     SAMPLE_PACKETS,
     TTCloudHeloPacket,
-    DataPacket,
+    DataPacketRev32,
     LightSensorPacket,
     TTCommand1,
     TTCommand2,
@@ -80,10 +80,10 @@ class DummyRadio:
             packet = random.choice(
                 [SAMPLE_PACKETS["DataPacket"], SAMPLE_PACKETS["LightSensorPacket"]]
             )
-            assert isinstance(packet, DataPacket) or isinstance(
+            assert isinstance(packet, DataPacketRev32) or isinstance(
                 packet, LightSensorPacket
             )
-            packet.time = int(time.time())
+            packet.timestamp = int(time.time())
             logging.debug(f"Sending {packet.__class__.__name__}")
             self.mqtt_client.publish(
                 topic=f"receive/{packet.__class__.__name__}",
