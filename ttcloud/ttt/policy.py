@@ -25,7 +25,6 @@ from ttt.util import (
     compute_battery_voltage_rev_3_2,
 )
 
-
 RDE = 1
 ANALYSIS_INTERVAL = "2d"
 SLEEP_TIME_MIN = 60
@@ -112,7 +111,7 @@ class DataPolicy:
         return sleep_time
 
     def _evaluate_position(
-        self, packet: DataPacketRev32, means: Dict[str, List[int]]
+            self, packet: DataPacketRev32, means: Dict[str, List[int]]
     ) -> bool:
         mean_x = mean(means["x"])
         stdev_x = stdev(means["x"])
@@ -126,9 +125,9 @@ class DataPolicy:
         z = packet.gravity_z_mean
 
         return (
-            abs(x - mean_x) > stdev_x
-            or abs(y - mean_y) > stdev_y
-            or abs(z - mean_z) > stdev_z
+                abs(x - mean_x) > stdev_x
+                or abs(y - mean_y) > stdev_y
+                or abs(z - mean_z) > stdev_z
         )
 
     def _evaluate_movement(self, packet: DataPacketRev32) -> bool:
@@ -141,12 +140,12 @@ class DataPolicy:
         z = packet.gravity_z_derivation
 
         return (
-            abs(x - self.aggregated_movement["mean_x"])
-            > self.aggregated_movement["stdev_x"]
-            or abs(y - self.aggregated_movement["mean_y"])
-            > self.aggregated_movement["stdev_y"]
-            or abs(z - self.aggregated_movement["mean_z"])
-            > self.aggregated_movement["stdev_z"]
+                abs(x - self.aggregated_movement["mean_x"])
+                > self.aggregated_movement["stdev_x"]
+                or abs(y - self.aggregated_movement["mean_y"])
+                > self.aggregated_movement["stdev_y"]
+                or abs(z - self.aggregated_movement["mean_z"])
+                > self.aggregated_movement["stdev_z"]
         )
 
     def _evaluate_gravity(self, packet: Union[DataPacketRev31, DataPacketRev32]) -> int:
@@ -169,7 +168,7 @@ class DataPolicy:
         ) or self._evaluate_movement(packet=packet)
 
     def _evaluate_temperature(
-        self, packet: Union[DataPacketRev31, DataPacketRev32]
+            self, packet: Union[DataPacketRev31, DataPacketRev32]
     ) -> bool:
         if not self.aggregated_movement:
             logging.info("Haven't received any aggregated temperature data yet.")
@@ -200,10 +199,10 @@ class DataPolicy:
             heat_probe_hot.append(datapoint["ttt_heat_probe_hot"])
 
         if (
-            not reference_probe_cold
-            or not reference_probe_hot
-            or not heat_probe_cold
-            or not heat_probe_hot
+                not reference_probe_cold
+                or not reference_probe_hot
+                or not heat_probe_cold
+                or not heat_probe_hot
         ):
             logging.debug(
                 f"No historical temperature data present: [reference_probe_cold: {reference_probe_cold}, reference_probe_hot: {reference_probe_hot}, heat_probe_cold: {heat_probe_cold}, heat_probe_hot: {heat_probe_hot}]"
@@ -223,10 +222,10 @@ class DataPolicy:
         mean_delta_hot = mean(deltas_hot)
 
         return (
-            abs(delta_cold - mean_delta_cold)
-            > self.aggregated_temperature["stdev_delta_cold"]
-            or abs(delta_hot - mean_delta_hot)
-            > self.aggregated_temperature["stdev_delta_hot"]
+                abs(delta_cold - mean_delta_cold)
+                > self.aggregated_temperature["stdev_delta_cold"]
+                or abs(delta_hot - mean_delta_hot)
+                > self.aggregated_temperature["stdev_delta_hot"]
         )
 
     def evaluate_3_2(self, packet: DataPacketRev32) -> TTCommand1:
@@ -235,7 +234,7 @@ class DataPolicy:
         )
 
         if self._evaluate_gravity(packet=packet) or self._evaluate_temperature(
-            packet=packet
+                packet=packet
         ):
             sleep_interval = SLEEP_TIME_MIN
 
@@ -257,7 +256,7 @@ class DataPolicy:
         )
 
         if self._evaluate_gravity(packet=packet) or self._evaluate_temperature(
-            packet=packet
+                packet=packet
         ):
             sleep_interval = SLEEP_TIME_MIN
 
@@ -279,9 +278,58 @@ class LightPolicy:
     local_address: TTAddress
     influx_client: influx.InfluxDBClient
 
+    def _calculate_scaled_brightness(self, f: List[float], scal: List[float]) -> float:
+        retval: float = 0
+        for val, scalar in zip(f, scal):
+            retval = retval + val * scalar
+        return retval / 6
+
     def _evaluate_brightness(self, packet: LightSensorPacket) -> int:
-        # Welche Variable enthält dies?
-        pass
+        # Paper Referenz: https://www.mdpi.com/1424-8220/16/8/1310/htm
+        # -> Airborne Optical and Thermal Remote Sensing for Wildfire Detection and Monitoring by Robert S. Allison et. al. 2016
+        # Die wirklich wichtigen Frequenzen (z.B. 3µm für Hitze und 1.2nm für das Spektralband von Kaliumrauch) sind leider nicht erfasst
+        # Darum Skalar bei den Infrarot - Rotbereich 860nm bis 610nm zugunsten des Infrarotbereiches
+        scalar_red = [0.4, 0.5, 1, 2, 3, 5]
+        scalar_blue = [1, 1, 1, 1, 1, 1]
+        cur_redvalue = self._calculate_scaled_brightness(list(packet.AS7263.values()), scalar_red)
+        cur_bluevalue = self._calculate_scaled_brightness(list(packet.AS7262.values()), scalar_blue)
+
+        redvalues: List[float] = []
+        bluevalues: List[float] = []
+        data: ResultSet = self.influx_client.query(
+            f'SELECT "610","680","730","760","810","860" FROM "AS7263" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
+        )
+        for datapoint in data.get_points("AS7263"):
+            redvalues.append(self._calculate_scaled_brightness(list(datapoint.values()), scalar_red))
+
+        # Optimierungsbedarf: beim Versuch ein Query über zwei Tables durchzuführen gab es bei mir
+        # zwei Resultsets zurück mit gemischten Abfragefeldern. Hierdurch konnte ich nicht mehr einfach in List casten.
+        # Darum lieber zwei Queries sofern es nicht anders schöner machbar ist.
+
+        data2: ResultSet = self.influx_client.query(
+            f'SELECT "450","500","550","570","600","650" FROM "AS7262" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
+        )
+        for datapoint in data2.get_points("AS7262"):
+            bluevalues.append(self._calculate_scaled_brightness(list(datapoint.values()), scalar_blue))
+
+        if (
+                not bluevalues
+                or not redvalues
+        ):
+            logging.debug(
+                f"No historical light data present: [bluevalues: {bluevalues}, redvalues: {redvalues}]"
+            )
+            return False
+
+        mean_redvalues = mean(redvalues)
+        mean_bluevalues = mean(bluevalues)
+
+        return (
+                abs(cur_bluevalue - mean_bluevalues)
+                > stdev(bluevalues)
+                or abs(cur_redvalue - mean_redvalues)
+                > stdev(redvalues)
+        )
 
     def evaluate(self, packet: LightSensorPacket) -> TTCommand2:
         return TTCommand2(
