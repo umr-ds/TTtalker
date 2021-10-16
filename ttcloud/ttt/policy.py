@@ -324,6 +324,9 @@ class LightPolicy:
         mean_redvalues = mean(redvalues)
         mean_bluevalues = mean(bluevalues)
 
+        # max_dev_redvalues = max(abs(el - mean_redvalues) for el in redvalues)
+        # max_dev_bluevalues = max(abs(el - mean_bluevalues) for el in bluevalues)
+
         return (
                 abs(cur_bluevalue - mean_bluevalues)
                 > stdev(bluevalues)
