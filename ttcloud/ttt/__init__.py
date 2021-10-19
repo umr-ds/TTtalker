@@ -9,4 +9,5 @@ __all__ = [
     "policy",
     "SX127x",
     "util",
+    "address",
 ]

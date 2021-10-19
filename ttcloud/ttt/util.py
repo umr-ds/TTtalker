@@ -1,6 +1,6 @@
 from uuid import getnode as get_mac
 
-from ttt.packets import TTAddress
+from ttt.address import TTAddress
 
 
 mV_BANDGAP = 1100

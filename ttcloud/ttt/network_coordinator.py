@@ -18,10 +18,10 @@ from paho.mqtt.packettypes import PacketTypes
 
 class Coordinator:
     def __init__(self, broker_address: str, broker_port: int) -> None:
-        self.mqtt_client = mqtt.Client(client_id="archiver", protocol=mqtt.MQTTv5)
+        self.mqtt_client = mqtt.Client(client_id="coordinator", protocol=mqtt.MQTTv5)
         self.mqtt_client.connect(host=broker_address, port=broker_port)
         self.mqtt_client.on_message = self.on_message
-        self.mqtt_client.subscribe("helo/reqest")
+        self.mqtt_client.subscribe("helo/request")
 
         # keys: tt_address, val: cloud_address
         self.assignments: Dict[int, int] = {}

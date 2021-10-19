@@ -3,25 +3,13 @@ from dataclasses import dataclass
 from io import BytesIO
 from struct import unpack, pack
 from typing import Dict, Callable, Tuple, List, Any
-from util import (
+
+from ttt.util import (
     compute_battery_voltage_rev_3_2,
     compute_battery_voltage_rev_3_1,
     compute_temperature,
 )
-
-
-@dataclass
-class TTAddress:
-    address: int
-
-    def __str__(self) -> str:
-        return hex(self.address)
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, TTAddress) and (self.address == other.address)
-
-    def __hash__(self) -> int:
-        return self.address.__hash__()
+from ttt.address import TTAddress
 
 
 @dataclass

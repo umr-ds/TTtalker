@@ -16,6 +16,7 @@ from ttt.SX127x.constants import MODE, BW, CODING_RATE
 
 from ttt.packets import *
 from util import generate_tt_address
+from ttt.address import TTAddress
 
 
 class LoRaParser(LoRa):

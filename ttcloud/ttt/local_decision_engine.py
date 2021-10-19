@@ -16,6 +16,7 @@ import influxdb as influx
 from ttt.packets import *
 from ttt.policy import DataPolicy, LightPolicy
 from ttt.util import generate_tt_address
+from ttt.address import TTAddress
 
 
 class LDE:

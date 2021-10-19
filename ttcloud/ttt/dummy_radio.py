@@ -19,9 +19,9 @@ from ttt.packets import (
     LightSensorPacket,
     TTCommand1,
     TTCommand2,
-    TTAddress,
 )
 from ttt.util import generate_tt_address
+from ttt.address import TTAddress
 
 
 class DummyRadio:
