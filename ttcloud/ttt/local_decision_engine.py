@@ -15,6 +15,7 @@ import influxdb as influx
 
 from ttt.packets import *
 from ttt.policy import DataPolicy, LightPolicy
+from ttt.util import generate_tt_address
 
 
 class LDE:
@@ -24,8 +25,10 @@ class LDE:
         self.mqtt_client = mqtt.Client("lde")
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
-        self.mqtt_client.subscribe("receive/#")
+
         self.mqtt_client.subscribe("global/#")
+        self.mqtt_client.subscribe(f"receive/{self.address.address}")
+        self.mqtt_client.subscribe(f"helo/response/{self.address.address}")
 
         self.influx_client = influx.InfluxDBClient(host=influx_address, port=8086)
 
@@ -58,14 +61,34 @@ class LDE:
     def on_message(
         self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage
     ) -> None:
-        logging.debug("Received MQTT Message")
+        logging.debug(f"Received MQTT Message on topic {message.topic}")
 
         if "receive" in message.topic:
             self._handle_packet(message)
         elif "global" in message.topic:
             self._handle_global_state(message)
+        elif "helo" in message.topic:
+            self._handle_helo_response(message)
         else:
             logging.error(f"Received message from unknown topic {message.topic}")
+
+    def _handle_helo_response(self, message: mqtt.MQTTMessage) -> None:
+        response: Dict[str, Union[int, bool]] = json.loads(message.payload)
+        connect: bool = response["connect"]
+        if not connect:
+            return
+
+        cloud_helo = TTCloudHeloPacket(
+            receiver_address=TTAddress(address=response["tt_address"]),
+            sender_address=self.address,
+            command=190,
+            time=int(time.time()),
+        )
+
+        self.mqtt_client.publish(
+            topic=f"command/{self.address.address}",
+            payload=b64encode(cloud_helo.marshall()),
+        )
 
     def _handle_global_state(self, message: mqtt.MQTTMessage) -> None:
         logging.debug("Received global state message")
@@ -83,7 +106,8 @@ class LDE:
         logging.debug(f"Unamarshalled packet: {packet}")
 
         if isinstance(packet, TTHeloPacket):
-            reply = self._on_helo(packet=packet)
+            self._on_helo(packet=packet)
+            return
         elif isinstance(packet, DataPacketRev31):
             reply = self._on_data_rev_3_1(packet=packet)
         elif isinstance(packet, DataPacketRev32):
@@ -97,13 +121,13 @@ class LDE:
         logging.debug(f"Reply: {reply}")
         self.mqtt_client.publish(topic="command", payload=b64encode(reply.marshall()))
 
-    def _on_helo(self, packet: TTHeloPacket) -> TTCloudHeloPacket:
-        return TTCloudHeloPacket(
-            receiver_address=packet.sender_address,
-            sender_address=self.address,
-            command=190,
-            time=int(time.time()),
-        )
+    def _on_helo(self, packet: TTHeloPacket) -> None:
+        request: Dict[str, int] = {
+            "cloud_address": self.address.address,
+            "tt_address": packet.sender_address.address,
+        }
+        logging.debug(f"Sending connection request to backend: {request}")
+        self.mqtt_client.publish(topic="helo/request", payload=json.dumps(request))
 
     def _on_data_rev_3_2(self, packet: DataPacketRev32) -> TTPacket:
         reply = self.data_policy.evaluate_3_2(packet)
@@ -163,6 +187,6 @@ if __name__ == "__main__":
     with LDE(
         broker_address=args.broker,
         influx_address=args.influx,
-        address=TTAddress(3254976792),
+        address=generate_tt_address(),
     ) as lde:
         lde.start()

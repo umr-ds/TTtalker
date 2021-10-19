@@ -1,64 +1,76 @@
 #! /usr/bin/env python3
 """
-This program simply listens on certain mqtt topics and stores the results in the influxdb
+This component assigns treetalkers to ttclouds
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import json
 
-from typing import Any
-from base64 import b64decode
+from typing import Any, Dict, Union
 from time import sleep
 
 import paho.mqtt.client as mqtt
 from paho.mqtt.packettypes import PacketTypes
-import influxdb as influx
-
-from ttt.packets import TTPacket, TTHeloPacket, unmarshall
 
 
-class DataArchiver:
-    def __init__(
-        self, broker_address: str, broker_port: int, influx_address: str
-    ) -> None:
+class Coordinator:
+    def __init__(self, broker_address: str, broker_port: int) -> None:
         self.mqtt_client = mqtt.Client(client_id="archiver", protocol=mqtt.MQTTv5)
         self.mqtt_client.connect(host=broker_address, port=broker_port)
         self.mqtt_client.on_message = self.on_message
-        self.mqtt_client.subscribe("receive/#")
+        self.mqtt_client.subscribe("helo/reqest")
 
-        self.influx_client = influx.InfluxDBClient(host=influx_address, port=8086)
+        # keys: tt_address, val: cloud_address
+        self.assignments: Dict[int, int] = {}
 
-    def __enter__(self) -> DataArchiver:
+    def __enter__(self) -> Coordinator:
+        logging.info("Starting coordinator")
         self.mqtt_client.loop_start()
-        self.influx_client.create_database("ttt")
-        self.influx_client.switch_database("ttt")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        logging.info("Stopping coordinator")
         self.mqtt_client.loop_stop()
         self.mqtt_client.disconnect(
             reasoncode=mqtt.ReasonCodes(
                 packetType=PacketTypes.DISCONNECT, aName="Normal disconnection"
             )
         )
-        self.influx_client.close()
 
     def on_message(
         self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage
     ) -> None:
         logging.debug(f"Received MQTT Message on topic {message.topic}")
 
-        packet: TTPacket = unmarshall(b64decode(message.payload))
-        logging.debug(f"Unamarshalled packet: {packet}")
+        request: Dict[str, int] = json.loads(message.payload)
+        logging.debug(f"Received connection request: {request}")
+        cloud_address = request["cloud_address"]
+        tt_address = request["tt_address"]
 
-        if isinstance(packet, TTHeloPacket):
-            return
+        assignment: Union[int, None] = self.assignments.get(tt_address)
+        logging.debug(f"Assignment for tt {tt_address}: {assignment}")
 
-        packet_data = packet.to_influx_json()
-        logging.debug(f"Sending data to influx: {packet_data}")
-        self.influx_client.write_points(packet_data)
+        if assignment is None:
+            connect = True
+            self.assignments[tt_address] = cloud_address
+        else:
+            connect = assignment == cloud_address
+
+        logging.debug(f"Should connect: {connect}")
+
+        response: Dict[str, Union[int, bool]] = {
+            "tt_address": tt_address,
+            "connect": connect,
+        }
+
+        logging.debug(f"Sending response: {response}")
+
+        self.mqtt_client.publish(
+            topic=f"helo/response/{cloud_address}", payload=json.dumps(response)
+        )
 
 
 if __name__ == "__main__":
@@ -75,9 +87,6 @@ if __name__ == "__main__":
         type=int,
         dest="broker_port",
     )
-    parser.add_argument(
-        "-i", "--influx", help="Address of the influxdb", default="127.0.0.1"
-    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -91,10 +100,9 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    with DataArchiver(
+    with Coordinator(
         broker_address=args.broker,
         broker_port=args.broker_port,
-        influx_address=args.influx,
     ):
         while True:
-            sleep(1)
+            sleep(0.5)

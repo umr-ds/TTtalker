@@ -1,3 +1,8 @@
+from uuid import getnode as get_mac
+
+from ttt.packets import TTAddress
+
+
 mV_BANDGAP = 1100
 
 
@@ -19,3 +24,7 @@ def compute_battery_voltage_rev_3_2(adc_volt_bat: int, adc_bandgap: int) -> floa
 
 def compute_battery_voltage_rev_3_1(voltage: int) -> float:
     return 650 + (131072 * (1100 / voltage))
+
+
+def generate_tt_address() -> TTAddress:
+    return TTAddress(address=(get_mac() % 10000000000))

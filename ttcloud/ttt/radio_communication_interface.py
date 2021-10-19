@@ -15,15 +15,19 @@ from ttt.SX127x.board_config import BOARD
 from ttt.SX127x.constants import MODE, BW, CODING_RATE
 
 from ttt.packets import *
+from util import generate_tt_address
 
 
 class LoRaParser(LoRa):
-    def __init__(self, verbose: bool, broker_address: str):
+    def __init__(self, verbose: bool, broker_address: str, address: TTAddress):
         LoRa.__init__(self=self, verbose=verbose)
+
+        self.address = address
+
         self.mqtt_client = mqtt.Client("rci")
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
-        self.mqtt_client.subscribe("command")
+        self.mqtt_client.subscribe(f"command/{self.address}")
 
     def __enter__(self) -> LoRaParser:
 
@@ -69,7 +73,7 @@ class LoRaParser(LoRa):
         packet: TTPacket = unmarshall(bytes(payload))
         logging.debug(f"Parsed Receive: {packet}")
         self.mqtt_client.publish(
-            topic=f"receive/{packet.__class__.__name__}",
+            topic=f"receive/{self.address.address}",
             payload=b64encode(packet.marshall()),
         )
 
@@ -96,7 +100,7 @@ class LoRaParser(LoRa):
     def on_message(
         self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage
     ) -> None:
-        logging.debug("Received mqtt message")
+        logging.debug(f"Received MQTT Message on topic {message.topic}")
         packet = unmarshall(b64decode(message.payload))
         self.send_packet(packet)
 
@@ -123,5 +127,7 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    with LoRaParser(verbose=args.verbose, broker_address=args.broker) as lora_parser:
+    with LoRaParser(
+        verbose=args.verbose, broker_address=args.broker, address=generate_tt_address()
+    ) as lora_parser:
         lora_parser.start()

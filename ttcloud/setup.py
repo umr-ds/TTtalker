@@ -19,6 +19,7 @@ setup(
         "ttt/radio_communication_interface.py",
         "ttt/local_decision_engine.py",
         "ttt/data_archiver.py",
+        "ttt/network_coordinator.py",
         "ttt/aggregator.py",
         "ttt/dummy_radio.py",
     ],

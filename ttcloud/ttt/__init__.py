@@ -3,6 +3,7 @@ __all__ = [
     "local_decision_engine",
     "data_archiver",
     "aggregator",
+    "network_coordinator",
     "dummy_radio",
     "packets",
     "policy",

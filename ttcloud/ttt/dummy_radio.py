@@ -19,17 +19,20 @@ from ttt.packets import (
     LightSensorPacket,
     TTCommand1,
     TTCommand2,
+    TTAddress,
 )
+from ttt.util import generate_tt_address
 
 
 class DummyRadio:
-    def __init__(self, broker_address: str):
+    def __init__(self, broker_address: str, address: TTAddress):
+        self.initialised = False
+        self.address = address
+
         self.mqtt_client = mqtt.Client("rci")
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
-        self.mqtt_client.subscribe("command")
-
-        self.initialised = False
+        self.mqtt_client.subscribe(f"command/{self.address}")
 
     def __enter__(self) -> DummyRadio:
         self.mqtt_client.loop_start()
@@ -47,6 +50,8 @@ class DummyRadio:
     def on_message(
         self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage
     ) -> None:
+        logging.debug(f"Received MQTT Message on topic {message.topic}")
+
         packet = unmarshall(b64decode(message.payload))
         if isinstance(packet, TTCloudHeloPacket):
             logging.debug("Received TTCloudHeloPacket")
@@ -102,5 +107,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.DEBUG)
 
-    with DummyRadio(broker_address=args.broker) as radio_interface:
+    with DummyRadio(
+        broker_address=args.broker, address=generate_tt_address()
+    ) as radio_interface:
         radio_interface.start()
