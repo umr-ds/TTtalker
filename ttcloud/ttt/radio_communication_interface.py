@@ -14,7 +14,7 @@ from ttt.SX127x.LoRa import LoRa
 from ttt.SX127x.board_config import BOARD
 from ttt.SX127x.constants import MODE, BW, CODING_RATE
 
-from ttt.packets import *
+from ttt.packets import TTPacket, unmarshall
 from util import generate_tt_address
 from ttt.address import TTAddress
 
