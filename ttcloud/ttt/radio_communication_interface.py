@@ -29,7 +29,7 @@ class LoRaParser(LoRa):
         self.mqtt_client = mqtt.Client("rci")
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
-        self.mqtt_client.subscribe(f"command/{self.address}")
+        self.mqtt_client.subscribe(f"command/{self.address.address}")
 
     def __enter__(self) -> LoRaParser:
 
