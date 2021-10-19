@@ -245,8 +245,9 @@ class DataPolicy:
             sender_address=self.local_address,
             command=32,
             time=int(time.time()),
+            time_slot=0,
             sleep_interval=sleep_interval,
-            unknown=(0, 45, 1),
+            unknown=(45, 1),
             heating=heating,
         )
 
@@ -268,7 +269,8 @@ class DataPolicy:
             command=32,
             time=int(time.time()),
             sleep_interval=sleep_interval,
-            unknown=(0, 45, 1),
+            time_slot=0,
+            unknown=(45, 1),
             heating=heating,
         )
 

@@ -53,6 +53,9 @@ class LDE:
             local_address=address, influx_client=self.influx_client
         )
 
+        self.connected_clients: Dict[TTAddress, int] = {}
+        self.time_slot = 0
+
     def __enter__(self) -> LDE:
         self.mqtt_client.loop_start()
         self.influx_client.create_database("ttt")
@@ -90,8 +93,10 @@ class LDE:
             logging.debug("Backend told us not to connect")
             return
 
+        tt_address = TTAddress(address=response["tt_address"])
+
         cloud_helo = TTCloudHeloPacket(
-            receiver_address=TTAddress(address=response["tt_address"]),
+            receiver_address=tt_address,
             sender_address=self.address,
             command=190,
             time=int(time.time()),
@@ -103,6 +108,18 @@ class LDE:
             topic=f"command/{self.address.address}",
             payload=b64encode(cloud_helo.marshall()),
         )
+
+        self._add_tt_to_connected(address=tt_address)
+
+    def _add_tt_to_connected(self, address: TTAddress) -> None:
+        logging.debug(f"Adding tt {address} to connected nodes")
+
+        if address in self.connected_clients:
+            logging.debug(f"tt {address} already tracked, doing nothing")
+            return
+
+        self.connected_clients[address] = self.time_slot
+        self.time_slot += 1
 
     def _handle_global_state(self, message: mqtt.MQTTMessage) -> None:
         logging.debug("Received global state message")
@@ -145,6 +162,7 @@ class LDE:
 
     def _on_data_rev_3_2(self, packet: DataPacketRev32) -> TTPacket:
         reply = self.data_policy.evaluate_3_2(packet)
+        reply.time_slot = self.connected_clients[reply.receiver_address]
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")
@@ -154,6 +172,7 @@ class LDE:
 
     def _on_data_rev_3_1(self, packet: DataPacketRev31) -> TTPacket:
         reply = self.data_policy.evaluate_3_1(packet)
+        reply.time_slot = self.connected_clients[reply.receiver_address]
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")
