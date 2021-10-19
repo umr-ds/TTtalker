@@ -22,6 +22,7 @@ from ttt.address import TTAddress
 class LDE:
     def __init__(self, broker_address: str, influx_address: str, address: TTAddress):
         self.address = address
+        logging.debug(f"Own address: {self.address}")
 
         self.mqtt_client = mqtt.Client("lde")
         self.mqtt_client.connect(broker_address)
@@ -68,15 +69,17 @@ class LDE:
             self._handle_packet(message)
         elif "global" in message.topic:
             self._handle_global_state(message)
-        elif "helo" in message.topic:
+        elif "helo/response" in message.topic:
             self._handle_helo_response(message)
         else:
             logging.error(f"Received message from unknown topic {message.topic}")
 
     def _handle_helo_response(self, message: mqtt.MQTTMessage) -> None:
         response: Dict[str, Union[int, bool]] = json.loads(message.payload)
+        logging.debug(f"Received connection response: {response}")
         connect: bool = response["connect"]
         if not connect:
+            logging.debug("Backend told us not to connect")
             return
 
         cloud_helo = TTCloudHeloPacket(
@@ -85,6 +88,8 @@ class LDE:
             command=190,
             time=int(time.time()),
         )
+
+        logging.debug(f"Sending response packet: {cloud_helo}")
 
         self.mqtt_client.publish(
             topic=f"command/{self.address.address}",

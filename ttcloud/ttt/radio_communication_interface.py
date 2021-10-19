@@ -24,6 +24,7 @@ class LoRaParser(LoRa):
         LoRa.__init__(self=self, verbose=verbose)
 
         self.address = address
+        logging.debug(f"Own address: {self.address}")
 
         self.mqtt_client = mqtt.Client("rci")
         self.mqtt_client.connect(broker_address)
