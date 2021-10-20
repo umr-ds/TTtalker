@@ -150,7 +150,9 @@ class LDE:
             return
 
         logging.debug(f"Reply: {reply}")
-        self.mqtt_client.publish(topic="command", payload=b64encode(reply.marshall()))
+        self.mqtt_client.publish(
+            topic=f"command/{self.address.address}", payload=b64encode(reply.marshall())
+        )
 
     def _on_helo(self, packet: TTHeloPacket) -> None:
         request: Dict[str, int] = {
