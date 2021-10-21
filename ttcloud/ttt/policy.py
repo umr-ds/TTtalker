@@ -29,6 +29,7 @@ RDE = 1
 ANALYSIS_INTERVAL = "2d"
 SLEEP_TIME_MIN = 60
 SLEEP_TIME_DEFAULT = 600
+TIME_SLOT_LENGTH = 30
 
 
 @dataclass
@@ -245,9 +246,10 @@ class DataPolicy:
             sender_address=self.local_address,
             command=32,
             time=int(time.time()),
-            time_slot=0,
+            unknown=0,
             sleep_interval=sleep_interval,
-            unknown=(45, 1),
+            time_slot_length=TIME_SLOT_LENGTH,
+            time_slot=0,
             heating=heating,
         )
 
@@ -269,8 +271,9 @@ class DataPolicy:
             command=32,
             time=int(time.time()),
             sleep_interval=sleep_interval,
+            unknown=0,
+            time_slot_length=TIME_SLOT_LENGTH,
             time_slot=0,
-            unknown=(45, 1),
             heating=heating,
         )
 

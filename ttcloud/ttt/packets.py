@@ -567,9 +567,10 @@ class TTCommand1(TTPacket):
     command: int
     time: int
     sleep_interval: int
-    time_slot: int
-    unknown: Tuple[int, int]
+    unknown: int
     heating: int
+    time_slot: int
+    time_slot_length: int
     packet_type: int = 66
 
     def __eq__(self, other) -> bool:
@@ -586,9 +587,10 @@ class TTCommand1(TTPacket):
             command=fields[0],
             time=fields[1],
             sleep_interval=fields[2],
-            time_slot=fields[3],
+            unknown=fields[3],
             heating=fields[4],
-            unknown=(fields[5], fields[6]),
+            time_slot_length=fields[5],
+            time_slot=fields[6],
         )
 
     def marshall(self) -> bytes:
@@ -600,10 +602,10 @@ class TTCommand1(TTPacket):
             self.command,
             self.time,
             self.sleep_interval,
-            self.time_slot,
+            self.unknown,
             self.heating,
-            self.unknown[0],
-            self.unknown[1],
+            self.time_slot_length,
+            self.time_slot,
         )
 
 
@@ -750,9 +752,10 @@ SAMPLE_PACKETS: Dict[str, TTPacket] = {
         command=24,
         time=1615386764,
         sleep_interval=3600,
-        time_slot=0,
+        unknown=0,
         heating=600,
-        unknown=(45, 2),
+        time_slot_length=45,
+        time_slot=2,
     ),
     "TTCommand2": TTCommand2(
         receiver_address=TTAddress(1375928658),
