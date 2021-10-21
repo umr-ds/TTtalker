@@ -136,6 +136,21 @@ class LDE:
         packet: TTPacket = unmarshall(b64decode(message.payload))
         logging.debug(f"Unamarshalled packet: {packet}")
 
+        if (
+            packet.receiver_address.address == 1597608414
+            or packet.receiver_address.address == 1246382666
+        ):
+            logging.debug(
+                f"Received multicast message addressed to {packet.receiver_address.address}"
+            )
+        elif packet.receiver_address == self.address:
+            logging.debug("Received unicast message addressed to us")
+        else:
+            logging.debug(
+                f"Received unicast message addressed to someone else ({packet.receiver_address})"
+            )
+            return
+
         if isinstance(packet, TTHeloPacket):
             self._on_helo(packet=packet)
             return
@@ -164,7 +179,7 @@ class LDE:
 
     def _on_data_rev_3_2(self, packet: DataPacketRev32) -> TTPacket:
         reply = self.data_policy.evaluate_3_2(packet)
-        reply.time_slot = self.connected_clients[reply.receiver_address]
+        reply.time_slot = self.connected_clients.get(reply.receiver_address, 0)
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")
@@ -174,7 +189,7 @@ class LDE:
 
     def _on_data_rev_3_1(self, packet: DataPacketRev31) -> TTPacket:
         reply = self.data_policy.evaluate_3_1(packet)
-        reply.time_slot = self.connected_clients[reply.receiver_address]
+        reply.time_slot = self.connected_clients.get(reply.receiver_address, 0)
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")
