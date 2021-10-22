@@ -57,7 +57,7 @@ class DataPolicy:
 
     def _evaluate_battery(self, sender_address: int, battery_voltage: float) -> int:
         data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_voltage" FROM "power" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {sender_address}'
+            f'SELECT "ttt_voltage" FROM "power" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treealker" = \'{sender_address}\')'
         )
         times = []
         voltages = []
@@ -82,7 +82,7 @@ class DataPolicy:
         try:
             sleep_time = next(
                 self.influx_client.query(
-                    f'SELECT last("sleep_time") FROM "sleep_time" WHERE treealker = {sender_address}'
+                    f'SELECT last("sleep_time") FROM "sleep_time" WHERE ("treealker" = \'{sender_address}\')'
                 ).get_points("power")
             )[
                 "last"
@@ -152,7 +152,7 @@ class DataPolicy:
     def _evaluate_gravity(self, packet: Union[DataPacketRev31, DataPacketRev32]) -> int:
         means: Dict[str, List[int]] = defaultdict(list)
         data: ResultSet = self.influx_client.query(
-            f'SELECT "x_mean", "y_mean", "z_mean" FROM "gravity" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
+            f'SELECT "x_mean", "y_mean", "z_mean" FROM "gravity" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treealker" = \'{packet.sender_address.address}\')'
         )
 
         for datapoint in data.get_points("gravity"):
@@ -185,7 +185,7 @@ class DataPolicy:
         delta_hot = abs(temperature_heat_hot - temperature_reference_hot)
 
         data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
+            f'SELECT "ttt_reference_probe_cold", "ttt_reference_probe_hot", "ttt_heat_probe_cold", "ttt_heat_probe_hot" FROM "stem_temperature" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treealker" = \'{packet.sender_address.address}\')'
         )
 
         reference_probe_cold: List[float] = []
@@ -306,7 +306,7 @@ class LightPolicy:
         redvalues: List[float] = []
         bluevalues: List[float] = []
         data: ResultSet = self.influx_client.query(
-            f'SELECT "610","680","730","760","810","860" FROM "AS7263" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
+            f'SELECT "610", "680", "730", "760", "810", "860" FROM "AS7263" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treealker" = \'{packet.sender_address.address}\')'
         )
         for datapoint in data.get_points("AS7263"):
             redvalues.append(
@@ -318,7 +318,7 @@ class LightPolicy:
         # Darum lieber zwei Queries sofern es nicht anders schöner machbar ist.
 
         data2: ResultSet = self.influx_client.query(
-            f'SELECT "450","500","550","570","600","650" FROM "AS7262" WHERE time > now() - {ANALYSIS_INTERVAL} AND treealker = {packet.sender_address.address}'
+            f'SELECT "450", "500", "550", "570", "600", "650" FROM "AS7262" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treealker" = \'{packet.sender_address.address}\')'
         )
         for datapoint in data2.get_points("AS7262"):
             bluevalues.append(
