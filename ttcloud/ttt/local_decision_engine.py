@@ -54,7 +54,7 @@ class LDE:
         )
 
         self.connected_clients: Dict[TTAddress, int] = {}
-        self.time_slot = 2
+        self.time_slot = 1
 
     def __enter__(self) -> LDE:
         self.mqtt_client.loop_start()
