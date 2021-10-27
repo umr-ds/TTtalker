@@ -148,6 +148,11 @@ class LDE:
             )
         elif packet.receiver_address == self.address:
             logging.debug("Received unicast message addressed to us")
+            if packet.sender_address not in self.connected_clients:
+                logging.debug(
+                    f"Node {packet.sender_address} sent us a unicast, but is not connected."
+                )
+                self._add_tt_to_connected(packet.sender_address)
         else:
             logging.debug(
                 f"Received unicast message addressed to someone else ({packet.receiver_address})"
