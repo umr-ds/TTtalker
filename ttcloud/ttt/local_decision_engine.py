@@ -115,11 +115,17 @@ class LDE:
         logging.debug(f"Adding tt {address} to connected nodes")
 
         if address in self.connected_clients:
-            logging.debug(f"tt {address} already tracked, doing nothing")
+            logging.debug(
+                f"tt {address} already tracked, has timeslot {self.connected_clients[address]}"
+            )
             return
 
         self.connected_clients[address] = self.time_slot
         self.time_slot += 1
+
+        logging.debug(
+            f"Node {address} now has timeslot {self.connected_clients[address]}"
+        )
 
     def _handle_global_state(self, message: mqtt.MQTTMessage) -> None:
         logging.debug("Received global state message")
@@ -136,10 +142,7 @@ class LDE:
         packet: TTPacket = unmarshall(b64decode(message.payload))
         logging.debug(f"Unamarshalled packet: {packet}")
 
-        if (
-            packet.receiver_address.address == 1597608414
-            or packet.receiver_address.address == 1246382666
-        ):
+        if packet.receiver_address.address == 1246382666:
             logging.debug(
                 f"Received multicast message addressed to {packet.receiver_address.address}"
             )
