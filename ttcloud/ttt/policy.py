@@ -56,9 +56,14 @@ class DataPolicy:
         )
 
     def _evaluate_battery(self, sender_address: int, battery_voltage: float) -> int:
-        data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_voltage" FROM "power" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treetalker" = \'{sender_address}\')'
-        )
+        try:
+            data: ResultSet = self.influx_client.query(
+                f'SELECT "ttt_voltage" FROM "power" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treetalker" = \'{sender_address}\')'
+            )
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
+            return SLEEP_TIME_DEFAULT
+
         times = []
         voltages = []
         for datapoint in data.get_points("power"):
@@ -90,6 +95,9 @@ class DataPolicy:
         except StopIteration:
             logging.debug("No previous sleep time present")
             sleep_time = SLEEP_TIME_DEFAULT
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
+            sleep_time = SLEEP_TIME_DEFAULT
 
         sleep_time = int(
             sleep_time
@@ -107,7 +115,11 @@ class DataPolicy:
                 },
             },
         ]
-        self.influx_client.write_points(influx_data)
+
+        try:
+            self.influx_client.write_points(influx_data)
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
 
         return sleep_time
 
@@ -149,11 +161,18 @@ class DataPolicy:
             > self.aggregated_movement["stdev_z"]
         )
 
-    def _evaluate_gravity(self, packet: Union[DataPacketRev31, DataPacketRev32]) -> int:
+    def _evaluate_gravity(
+        self, packet: Union[DataPacketRev31, DataPacketRev32]
+    ) -> bool:
         means: Dict[str, List[int]] = defaultdict(list)
-        data: ResultSet = self.influx_client.query(
-            f'SELECT "x_mean", "y_mean", "z_mean" FROM "gravity" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treetalker" = \'{packet.sender_address.address}\')'
-        )
+
+        try:
+            data: ResultSet = self.influx_client.query(
+                f'SELECT "x_mean", "y_mean", "z_mean" FROM "gravity" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treetalker" = \'{packet.sender_address.address}\')'
+            )
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
+            return False
 
         for datapoint in data.get_points("gravity"):
             means["x"].append(datapoint["x_mean"])
@@ -184,9 +203,13 @@ class DataPolicy:
         delta_cold = abs(temperature_heat_cold - temperature_reference_cold)
         delta_hot = abs(temperature_heat_hot - temperature_reference_hot)
 
-        data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_reference_probe_cold", "ttt_reference_probe_hot", "ttt_heat_probe_cold", "ttt_heat_probe_hot" FROM "stem_temperature" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treetalker" = \'{packet.sender_address.address}\')'
-        )
+        try:
+            data: ResultSet = self.influx_client.query(
+                f'SELECT "ttt_reference_probe_cold", "ttt_reference_probe_hot", "ttt_heat_probe_cold", "ttt_heat_probe_hot" FROM "stem_temperature" WHERE "time" > now() - {ANALYSIS_INTERVAL} AND ("treetalker" = \'{packet.sender_address.address}\')'
+            )
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
+            return False
 
         reference_probe_cold: List[float] = []
         reference_probe_hot: List[float] = []

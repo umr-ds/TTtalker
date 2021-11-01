@@ -191,7 +191,11 @@ class LDE:
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")
-        self.influx_client.write_points(packet_data)
+
+        try:
+            self.influx_client.write_points(packet_data)
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
 
         return reply
 
@@ -201,7 +205,11 @@ class LDE:
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")
-        self.influx_client.write_points(packet_data)
+
+        try:
+            self.influx_client.write_points(packet_data)
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
 
         return reply
 
@@ -210,7 +218,11 @@ class LDE:
 
         packet_data = packet.to_influx_json()
         logging.debug(f"Sending data to influx: {packet_data}")
-        self.influx_client.write_points(packet_data)
+
+        try:
+            self.influx_client.write_points(packet_data)
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
 
         return reply
 
