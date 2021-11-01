@@ -28,11 +28,19 @@ from ttt.address import TTAddress
 
 
 class LDE:
-    def __init__(self, broker_address: str, influx_address: str, address: TTAddress):
+    def __init__(
+        self,
+        broker_address: str,
+        influx_address: str,
+        address: TTAddress,
+        respond: bool,
+    ):
         self.address = address
         logging.debug(f"Own address: {self.address}")
 
-        self.mqtt_client = mqtt.Client("lde")
+        self.respond = respond
+
+        self.mqtt_client = mqtt.Client(f"lde-{address}")
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
 
@@ -104,10 +112,11 @@ class LDE:
 
         logging.debug(f"Sending response packet: {cloud_helo}")
 
-        self.mqtt_client.publish(
-            topic=f"command/{self.address.address}",
-            payload=b64encode(cloud_helo.marshall()),
-        )
+        if self.respond:
+            self.mqtt_client.publish(
+                topic=f"command/{self.address.address}",
+                payload=b64encode(cloud_helo.marshall()),
+            )
 
         self._add_tt_to_connected(address=tt_address)
 
@@ -173,17 +182,22 @@ class LDE:
             return
 
         logging.debug(f"Reply: {reply}")
-        self.mqtt_client.publish(
-            topic=f"command/{self.address.address}", payload=b64encode(reply.marshall())
-        )
+
+        if self.respond:
+            self.mqtt_client.publish(
+                topic=f"command/{self.address.address}",
+                payload=b64encode(reply.marshall()),
+            )
 
     def _on_helo(self, packet: TTHeloPacket) -> None:
+        logging.debug(f"Received HELO-Request: {packet}")
         request: Dict[str, int] = {
             "cloud_address": self.address.address,
             "tt_address": packet.sender_address.address,
         }
-        logging.debug(f"Sending connection request to backend: {request}")
-        self.mqtt_client.publish(topic="helo/request", payload=json.dumps(request))
+        if self.respond:
+            logging.debug(f"Sending connection request to backend: {request}")
+            self.mqtt_client.publish(topic="helo/request", payload=json.dumps(request))
 
     def _on_data_rev_3_2(self, packet: DataPacketRev32) -> TTPacket:
         reply = self.data_policy.evaluate_3_2(packet)
@@ -241,6 +255,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "-i", "--influx", help="Address of the influxdb", default="localhost"
     )
+    parser.add_argument(
+        "-n",
+        "--no-response",
+        help="Don't actually send the response packet",
+        action="store_false",
+    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -258,5 +278,6 @@ if __name__ == "__main__":
         broker_address=args.broker,
         influx_address=args.influx,
         address=generate_tt_address(),
+        respond=args.no_response,
     ) as lde:
         lde.start()

@@ -79,10 +79,15 @@ class DataPolicy:
             )
             return SLEEP_TIME_DEFAULT
 
+        logging.debug(
+            f"Historical battery data from influx: [times: {times}, voltages: {voltages}]"
+        )
+
         times.append([int(time.time())])
         voltages.append(battery_voltage)
 
         reg: LinearRegression = LinearRegression().fit(times, voltages)
+        logging.debug(f"Linear regression: {reg}")
 
         try:
             sleep_time = next(
@@ -103,6 +108,8 @@ class DataPolicy:
             sleep_time
             + (RDE * (3700 - reg.predict([[int(time.time()) + (3600 * 48)]])[0]))
         )
+
+        logging.debug(f"Computed sleep time: {sleep_time}")
 
         influx_data = [
             {
@@ -137,11 +144,20 @@ class DataPolicy:
         y = packet.gravity_y_mean
         z = packet.gravity_z_mean
 
-        return (
+        logging.debug(
+            f"Position data: [mean_x: {mean_x}, stdev_x: {stdev_x}, mean_y: {mean_y}, stdev_y: {stdev_y}, mean_z: {mean_z}, stdev_z: {stdev_z}, x: {x}, y: {y}, z: {z}]"
+        )
+
+        # FIXME: This is broken,we probably want to go with something like 3-sigma or something
+        anomaly = (
             abs(x - mean_x) > stdev_x
             or abs(y - mean_y) > stdev_y
             or abs(z - mean_z) > stdev_z
         )
+
+        logging.debug(f"Detected position anomaly: {anomaly}")
+
+        return anomaly
 
     def _evaluate_movement(self, packet: DataPacketRev32) -> bool:
         if not self.aggregated_movement:
@@ -152,7 +168,12 @@ class DataPolicy:
         y = packet.gravity_y_derivation
         z = packet.gravity_z_derivation
 
-        return (
+        logging.debug(
+            f"Movement data: [x: {x}, y: {y}, z: {z}, aggregate: {self.aggregated_movement}]"
+        )
+
+        # FIXME: This is broken,we probably want to go with something like 3-sigma or something
+        anomaly = (
             abs(x - self.aggregated_movement["mean_x"])
             > self.aggregated_movement["stdev_x"]
             or abs(y - self.aggregated_movement["mean_y"])
@@ -160,6 +181,10 @@ class DataPolicy:
             or abs(z - self.aggregated_movement["mean_z"])
             > self.aggregated_movement["stdev_z"]
         )
+
+        logging.debug(f"Detected movement anomaly: {anomaly}")
+
+        return anomaly
 
     def _evaluate_gravity(
         self, packet: Union[DataPacketRev31, DataPacketRev32]
@@ -183,9 +208,13 @@ class DataPolicy:
             logging.debug("No historical gravity data present.")
             return False
 
-        return self._evaluate_position(
+        anomaly = self._evaluate_position(
             packet=packet, means=means
         ) or self._evaluate_movement(packet=packet)
+
+        logging.debug(f"Detected gravity anomaly: {anomaly}")
+
+        return anomaly
 
     def _evaluate_temperature(
         self, packet: Union[DataPacketRev31, DataPacketRev32]
@@ -233,6 +262,10 @@ class DataPolicy:
             )
             return False
 
+        logging.debug(
+            f"Historical temperature data: [reference_probe_cold: {reference_probe_cold}, reference_probe_hot: {reference_probe_hot}, heat_probe_cold: {heat_probe_cold}, heat_probe_hot: {heat_probe_hot}]"
+        )
+
         deltas_cold: List[float] = [
             abs(heat - reference)
             for heat, reference in zip(heat_probe_cold, reference_probe_cold)
@@ -245,12 +278,16 @@ class DataPolicy:
         ]
         mean_delta_hot = mean(deltas_hot)
 
-        return (
+        anomaly = (
             abs(delta_cold - mean_delta_cold)
             > self.aggregated_temperature["stdev_delta_cold"]
             or abs(delta_hot - mean_delta_hot)
             > self.aggregated_temperature["stdev_delta_hot"]
         )
+
+        logging.debug(f"Detected temperature anomaly: {anomaly}")
+
+        return anomaly
 
     def evaluate_3_2(self, packet: DataPacketRev32) -> TTCommand1:
         sleep_interval: int = max(
