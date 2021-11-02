@@ -97,6 +97,8 @@ class TTCloudHeloPacket(TTPacket):
 class DataPacketRev32(TTPacket):
     packet_number: int
     timestamp: int
+    temperature_reference_cold: int
+    temperature_heat_cold: int
     growth_sensor: int
     adc_bandgap: int
     number_of_bits: int
@@ -110,8 +112,8 @@ class DataPacketRev32(TTPacket):
     gravity_x_derivation: int
     StWC: int
     adc_volt_bat: int
-    temperature_reference: Tuple[int, int]
-    temperature_heat: Tuple[int, int]
+    temperature_reference_hot: int
+    temperature_heat_hot: int
     packet_type: int = 77
 
     def __eq__(self, other) -> bool:
@@ -124,8 +126,8 @@ class DataPacketRev32(TTPacket):
         fields = unpack("=BIIIIIBBhhhhhhhIIHI", raw_stream.read())
         packet_number: int = fields[0]
         timestamp: int = fields[1]
-        t_ref_0: int = fields[2]
-        t_heat_0: int = fields[3]
+        temperature_reference_cold: int = fields[2]
+        temperature_heat_cold: int = fields[3]
         growth_sensor: int = fields[4]
         adc_bandgap: int = fields[5]
         number_of_bits: int = fields[6]
@@ -137,18 +139,18 @@ class DataPacketRev32(TTPacket):
         gravity_y_derivation: int = fields[12]
         gravity_x_mean: int = fields[13]
         gravity_x_derivation: int = fields[14]
-        t_ref_1: int = fields[15]
-        t_heat_1: int = fields[16]
+        temperature_reference_hot: int = fields[15]
+        temperature_heat_hot: int = fields[16]
         StWC: int = fields[17]
         adc_volt_bat: int = fields[18]
 
-        temperature_reference: Tuple[int, int] = (t_ref_0, t_ref_1)
-        temperature_heat: Tuple[int, int] = (t_heat_0, t_heat_1)
         return cls(
             receiver_address=receiver_address,
             sender_address=sender_address,
             packet_number=packet_number,
             timestamp=timestamp,
+            temperature_reference_cold=temperature_reference_cold,
+            temperature_heat_cold=temperature_heat_cold,
             growth_sensor=growth_sensor,
             adc_bandgap=adc_bandgap,
             number_of_bits=number_of_bits,
@@ -162,8 +164,8 @@ class DataPacketRev32(TTPacket):
             gravity_x_derivation=gravity_x_derivation,
             StWC=StWC,
             adc_volt_bat=adc_volt_bat,
-            temperature_reference=temperature_reference,
-            temperature_heat=temperature_heat,
+            temperature_reference_hot=temperature_reference_hot,
+            temperature_heat_hot=temperature_heat_hot,
         )
 
     def marshall(self) -> bytes:
@@ -174,8 +176,8 @@ class DataPacketRev32(TTPacket):
             self.packet_type,
             self.packet_number,
             self.timestamp,
-            self.temperature_reference[0],
-            self.temperature_heat[0],
+            self.temperature_reference_cold,
+            self.temperature_heat_cold,
             self.growth_sensor,
             self.adc_bandgap,
             self.number_of_bits,
@@ -187,8 +189,8 @@ class DataPacketRev32(TTPacket):
             self.gravity_y_derivation,
             self.gravity_x_mean,
             self.gravity_x_derivation,
-            self.temperature_reference[1],
-            self.temperature_heat[1],
+            self.temperature_reference_hot,
+            self.temperature_heat_hot,
             self.StWC,
             self.adc_volt_bat,
         )
@@ -202,20 +204,22 @@ class DataPacketRev32(TTPacket):
                     "heating": True,
                 },
                 "fields": {
-                    "reference_probe_cold": self.temperature_reference[0],
-                    "reference_probe_hot": self.temperature_reference[1],
-                    "heat_probe_cold": self.temperature_heat[0],
-                    "heat_probe_hot": self.temperature_heat[1],
+                    "reference_probe_cold": self.temperature_reference_cold,
+                    "reference_probe_hot": self.temperature_reference_hot,
+                    "heat_probe_cold": self.temperature_heat_cold,
+                    "heat_probe_hot": self.temperature_heat_hot,
                     "ttt_reference_probe_cold": compute_temperature(
-                        self.temperature_reference[0]
+                        self.temperature_reference_cold
                     ),
                     "ttt_reference_probe_hot": compute_temperature(
-                        self.temperature_reference[1]
+                        self.temperature_reference_hot
                     ),
                     "ttt_heat_probe_cold": compute_temperature(
-                        self.temperature_heat[0]
+                        self.temperature_heat_cold
                     ),
-                    "ttt_heat_probe_hot": compute_temperature(self.temperature_heat[1]),
+                    "ttt_heat_probe_hot": compute_temperature(
+                        self.temperature_heat_hot
+                    ),
                 },
             },
             {
@@ -706,8 +710,10 @@ SAMPLE_PACKETS: Dict[str, TTPacket] = {
         sender_address=TTAddress(1375928658),
         packet_number=1,
         timestamp=14400,
-        temperature_reference=(34167, 34168),
-        temperature_heat=(34298, 22018),
+        temperature_reference_cold=34167,
+        temperature_reference_hot=34168,
+        temperature_heat_cold=34298,
+        temperature_heat_hot=22018,
         growth_sensor=47212,
         adc_bandgap=43585,
         number_of_bits=17,
