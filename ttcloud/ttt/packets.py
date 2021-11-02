@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 from struct import unpack, pack
-from typing import Dict, Callable, Tuple, List, Any
+from typing import Dict, Callable, List, Any
 
 from ttt.util import (
     compute_battery_voltage_rev_3_2,
@@ -104,12 +104,12 @@ class DataPacketRev32(TTPacket):
     number_of_bits: int
     air_relative_humidity: int
     air_temperature: int
-    gravity_z_mean: int
-    gravity_z_derivation: int
-    gravity_y_mean: int
-    gravity_y_derivation: int
     gravity_x_mean: int
+    gravity_y_mean: int
+    gravity_z_mean: int
     gravity_x_derivation: int
+    gravity_y_derivation: int
+    gravity_z_derivation: int
     StWC: int
     adc_volt_bat: int
     temperature_reference_hot: int
@@ -133,12 +133,12 @@ class DataPacketRev32(TTPacket):
         number_of_bits: int = fields[6]
         air_relative_humidity: int = fields[7]
         air_temperature: int = fields[8]
-        gravity_z_mean: int = fields[9]
-        gravity_z_derivation: int = fields[10]
-        gravity_y_mean: int = fields[11]
-        gravity_y_derivation: int = fields[12]
-        gravity_x_mean: int = fields[13]
-        gravity_x_derivation: int = fields[14]
+        gravity_x_mean: int = fields[9]
+        gravity_y_mean: int = fields[10]
+        gravity_z_mean: int = fields[11]
+        gravity_x_derivation: int = fields[12]
+        gravity_y_derivation: int = fields[13]
+        gravity_z_derivation: int = fields[14]
         temperature_reference_hot: int = fields[15]
         temperature_heat_hot: int = fields[16]
         StWC: int = fields[17]
@@ -183,12 +183,12 @@ class DataPacketRev32(TTPacket):
             self.number_of_bits,
             self.air_relative_humidity,
             self.air_temperature,
-            self.gravity_z_mean,
-            self.gravity_z_derivation,
-            self.gravity_y_mean,
-            self.gravity_y_derivation,
             self.gravity_x_mean,
+            self.gravity_y_mean,
+            self.gravity_z_mean,
             self.gravity_x_derivation,
+            self.gravity_y_derivation,
+            self.gravity_z_derivation,
             self.temperature_reference_hot,
             self.temperature_heat_hot,
             self.StWC,
@@ -291,12 +291,12 @@ class DataPacketRev31(TTPacket):
     number_of_bits: int
     air_relative_humidity: int
     air_temperature: int
-    gravity_z_mean: int
-    gravity_z_derivation: int
-    gravity_y_mean: int
-    gravity_y_derivation: int
     gravity_x_mean: int
+    gravity_y_mean: int
+    gravity_z_mean: int
     gravity_x_derivation: int
+    gravity_y_derivation: int
+    gravity_z_derivation: int
     temperature_reference_hot: int
     temperature_heat_hot: int
     moisture: int
@@ -319,12 +319,12 @@ class DataPacketRev31(TTPacket):
         number_of_bits: int = fields[6]
         air_relative_humidity: int = fields[7]
         air_temperature: int = fields[8]
-        gravity_z_mean: int = fields[9]
-        gravity_z_derivation: int = fields[10]
-        gravity_y_mean: int = fields[11]
-        gravity_y_derivation: int = fields[12]
-        gravity_x_mean: int = fields[13]
-        gravity_x_derivation: int = fields[14]
+        gravity_x_mean: int = fields[9]
+        gravity_y_mean: int = fields[10]
+        gravity_z_mean: int = fields[11]
+        gravity_x_derivation: int = fields[12]
+        gravity_y_derivation: int = fields[13]
+        gravity_z_derivation: int = fields[14]
         temperature_reference_hot: int = fields[15]
         temperature_heat_hot: int = fields[16]
         moisture: int = fields[17]
@@ -367,12 +367,12 @@ class DataPacketRev31(TTPacket):
             self.number_of_bits,
             self.air_relative_humidity,
             self.air_temperature,
-            self.gravity_z_mean,
-            self.gravity_z_derivation,
-            self.gravity_y_mean,
-            self.gravity_y_derivation,
             self.gravity_x_mean,
+            self.gravity_y_mean,
+            self.gravity_z_mean,
             self.gravity_x_derivation,
+            self.gravity_y_derivation,
+            self.gravity_z_derivation,
             self.temperature_reference_hot,
             self.temperature_heat_hot,
             self.moisture,
@@ -719,12 +719,12 @@ SAMPLE_PACKETS: Dict[str, TTPacket] = {
         number_of_bits=17,
         air_relative_humidity=30,
         air_temperature=226,
-        gravity_z_mean=57,
-        gravity_z_derivation=-803,
-        gravity_y_mean=3986,
-        gravity_y_derivation=0,
-        gravity_x_mean=0,
+        gravity_x_mean=57,
+        gravity_y_mean=-803,
+        gravity_z_mean=3986,
         gravity_x_derivation=0,
+        gravity_y_derivation=0,
+        gravity_z_derivation=0,
         StWC=50566,
         adc_volt_bat=82757,
     ),
