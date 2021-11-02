@@ -76,19 +76,21 @@ class DataPolicy:
 
         if not times or not voltages:
             logging.debug(
-                f"No data to compute regression: [times: {times}, voltages: {voltages}]"
+                f"No data to compute regression: [times: {len(times)}, voltages: {len(voltages)}]"
             )
             return SLEEP_TIME_DEFAULT
 
         logging.debug(
-            f"Historical battery data from influx: [times: {times}, voltages: {voltages}]"
+            f"Historical battery data from influx: [times: {len(times)}, voltages: {len(voltages)}]"
         )
 
         times.append([int(time.time())])
         voltages.append(battery_voltage)
 
         reg: LinearRegression = LinearRegression().fit(times, voltages)
-        logging.debug(f"Linear regression: {reg}")
+        logging.debug(
+            f"Linear regression: [Coefficients: {reg.coef_}, intercept: {reg.intercept_}]"
+        )
 
         try:
             sleep_time = next(
