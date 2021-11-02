@@ -26,6 +26,7 @@ from ttt.util import (
 from ttt.address import TTAddress
 
 RDE = 1
+CONFIDENCE = 3
 ANALYSIS_INTERVAL = "2d"
 SLEEP_TIME_MIN = 60
 SLEEP_TIME_DEFAULT = 600
@@ -148,11 +149,10 @@ class DataPolicy:
             f"Position data: [mean_x: {mean_x}, stdev_x: {stdev_x}, mean_y: {mean_y}, stdev_y: {stdev_y}, mean_z: {mean_z}, stdev_z: {stdev_z}, x: {x}, y: {y}, z: {z}]"
         )
 
-        # FIXME: This is broken,we probably want to go with something like 3-sigma or something
         anomaly = (
-            abs(x - mean_x) > stdev_x
-            or abs(y - mean_y) > stdev_y
-            or abs(z - mean_z) > stdev_z
+            abs(x - mean_x) > (stdev_x * CONFIDENCE)
+            or abs(y - mean_y) > (stdev_y * CONFIDENCE)
+            or abs(z - mean_z) > (stdev_z * CONFIDENCE)
         )
 
         logging.debug(f"Detected position anomaly: {anomaly}")
@@ -172,14 +172,13 @@ class DataPolicy:
             f"Movement data: [x: {x}, y: {y}, z: {z}, aggregate: {self.aggregated_movement}]"
         )
 
-        # FIXME: This is broken,we probably want to go with something like 3-sigma or something
         anomaly = (
             abs(x - self.aggregated_movement["mean_x"])
-            > self.aggregated_movement["stdev_x"]
+            > (self.aggregated_movement["stdev_x"] * CONFIDENCE)
             or abs(y - self.aggregated_movement["mean_y"])
-            > self.aggregated_movement["stdev_y"]
+            > (self.aggregated_movement["stdev_y"] * CONFIDENCE)
             or abs(z - self.aggregated_movement["mean_z"])
-            > self.aggregated_movement["stdev_z"]
+            > (self.aggregated_movement["stdev_z"] * CONFIDENCE)
         )
 
         logging.debug(f"Detected movement anomaly: {anomaly}")
@@ -278,11 +277,10 @@ class DataPolicy:
         ]
         mean_delta_hot = mean(deltas_hot)
 
-        anomaly = (
-            abs(delta_cold - mean_delta_cold)
-            > self.aggregated_temperature["stdev_delta_cold"]
-            or abs(delta_hot - mean_delta_hot)
-            > self.aggregated_temperature["stdev_delta_hot"]
+        anomaly = abs(delta_cold - mean_delta_cold) > (
+            self.aggregated_temperature["stdev_delta_cold"] * CONFIDENCE
+        ) or abs(delta_hot - mean_delta_hot) > (
+            self.aggregated_temperature["stdev_delta_hot"] * CONFIDENCE
         )
 
         logging.debug(f"Detected temperature anomaly: {anomaly}")
@@ -397,9 +395,9 @@ class LightPolicy:
         # max_dev_redvalues = max(abs(el - mean_redvalues) for el in redvalues)
         # max_dev_bluevalues = max(abs(el - mean_bluevalues) for el in bluevalues)
 
-        return abs(cur_bluevalue - mean_bluevalues) > stdev(bluevalues) or abs(
-            cur_redvalue - mean_redvalues
-        ) > stdev(redvalues)
+        return abs(cur_bluevalue - mean_bluevalues) > (
+            stdev(bluevalues) * CONFIDENCE
+        ) or abs(cur_redvalue - mean_redvalues) > (stdev(redvalues) * CONFIDENCE)
 
     def evaluate(self, packet: LightSensorPacket) -> TTCommand2:
         return TTCommand2(
