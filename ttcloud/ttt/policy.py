@@ -117,12 +117,12 @@ class DataPolicy:
 
         influx_data = [
             {
-                "measurement": "measurement_interval",
+                "measurement": "sleep_time",
                 "tags": {
                     "treetalker": sender_address,
                 },
                 "fields": {
-                    "measurement_interval": sleep_time,
+                    "sleep_time": sleep_time,
                 },
             },
         ]
@@ -302,11 +302,14 @@ class DataPolicy:
             self._evaluate_battery_3_2(packet=packet), SLEEP_TIME_MIN
         )
 
-        if (
-            self._evaluate_gravity(packet=packet)
-            or self._evaluate_stem_temperature(packet=packet)
-            or self._evaluate_air_temperature(packet=packet)
-        ):
+        logging.debug(f"Checking gravity data")
+        gravity_anomaly = self._evaluate_gravity(packet=packet)
+        logging.debug(f"Checking stem temperature")
+        stem_temperature_anomaly = self._evaluate_stem_temperature(packet=packet)
+        logging.debug(f"Checking air temperature")
+        air_temperature_anomaly = self._evaluate_air_temperature(packet=packet)
+
+        if gravity_anomaly or stem_temperature_anomaly or air_temperature_anomaly:
             sleep_interval = SLEEP_TIME_MIN
 
         heating = int(sleep_interval / 6)
@@ -328,11 +331,14 @@ class DataPolicy:
             self._evaluate_battery_3_1(packet=packet), SLEEP_TIME_MIN
         )
 
-        if (
-            self._evaluate_gravity(packet=packet)
-            or self._evaluate_stem_temperature(packet=packet)
-            or self._evaluate_air_temperature(packet=packet)
-        ):
+        logging.debug(f"Checking gravity data")
+        gravity_anomaly = self._evaluate_gravity(packet=packet)
+        logging.debug(f"Checking stem temperature")
+        stem_temperature_anomaly = self._evaluate_stem_temperature(packet=packet)
+        logging.debug(f"Checking air temperature")
+        air_temperature_anomaly = self._evaluate_air_temperature(packet=packet)
+
+        if gravity_anomaly or stem_temperature_anomaly or air_temperature_anomaly:
             sleep_interval = SLEEP_TIME_MIN
 
         heating = int(sleep_interval / 6)
