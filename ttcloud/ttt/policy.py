@@ -31,6 +31,7 @@ ANALYSIS_INTERVAL = "2d"
 SLEEP_TIME_MIN = 300
 SLEEP_TIME_DEFAULT = 600
 TIME_SLOT_LENGTH = 60
+CRITICAL_TEMPERATURE = 50
 
 
 @dataclass
@@ -217,7 +218,14 @@ class DataPolicy:
 
         return anomaly
 
-    def _evaluate_temperature(
+    def _evaluate_air_temperature(
+        self, packet: Union[DataPacketRev31, DataPacketRev32]
+    ) -> bool:
+        anomaly = packet.air_temperature >= CRITICAL_TEMPERATURE * 10
+        logging.debug(f"Found air temperature anomaly: {anomaly}")
+        return anomaly
+
+    def _evaluate_stem_temperature(
         self, packet: Union[DataPacketRev31, DataPacketRev32]
     ) -> bool:
         if not self.aggregated_movement:
@@ -294,8 +302,10 @@ class DataPolicy:
             self._evaluate_battery_3_2(packet=packet), SLEEP_TIME_MIN
         )
 
-        if self._evaluate_gravity(packet=packet) or self._evaluate_temperature(
-            packet=packet
+        if (
+            self._evaluate_gravity(packet=packet)
+            or self._evaluate_stem_temperature(packet=packet)
+            or self._evaluate_air_temperature(packet=packet)
         ):
             sleep_interval = SLEEP_TIME_MIN
 
@@ -318,8 +328,10 @@ class DataPolicy:
             self._evaluate_battery_3_1(packet=packet), SLEEP_TIME_MIN
         )
 
-        if self._evaluate_gravity(packet=packet) or self._evaluate_temperature(
-            packet=packet
+        if (
+            self._evaluate_gravity(packet=packet)
+            or self._evaluate_stem_temperature(packet=packet)
+            or self._evaluate_air_temperature(packet=packet)
         ):
             sleep_interval = SLEEP_TIME_MIN
 
