@@ -2,11 +2,13 @@ import logging
 import time
 
 from typing import Union, Dict, List
+from base64 import b64encode
 from collections import defaultdict
 from statistics import mean, stdev
 
 from dataclasses import dataclass
 
+import paho.mqtt.client as mqtt
 import influxdb as influx
 from influxdb.resultset import ResultSet
 from sklearn.linear_model import LinearRegression
@@ -37,6 +39,7 @@ CRITICAL_TEMPERATURE = 50
 @dataclass
 class DataPolicy:
     local_address: TTAddress
+    mqtt_client: mqtt.Client
     influx_client: influx.InfluxDBClient
     sleep_times: Dict[int, int]
     aggregated_movement: Dict[str, float]
@@ -288,10 +291,30 @@ class DataPolicy:
 
         logging.debug(f"Checking gravity data")
         gravity_anomaly = self._evaluate_gravity(packet=packet)
+        if gravity_anomaly:
+            logging.info("Detected gravity anomaly")
+            self.mqtt_client.publish(
+                f"anomaly/gravity/{self.local_address.address}",
+                b64encode(packet.marshall()),
+            )
+
         logging.debug(f"Checking stem temperature")
         stem_temperature_anomaly = self._evaluate_stem_temperature(packet=packet)
+        if stem_temperature_anomaly:
+            logging.info("Detected stem temperature anomaly")
+            self.mqtt_client.publish(
+                f"anomaly/stem_temperature/{self.local_address.address}",
+                b64encode(packet.marshall()),
+            )
+
         logging.debug(f"Checking air temperature")
         air_temperature_anomaly = self._evaluate_air_temperature(packet=packet)
+        if air_temperature_anomaly:
+            logging.info("Detected air temperature anomaly")
+            self.mqtt_client.publish(
+                f"anomaly/air_temperature/{self.local_address.address}",
+                b64encode(packet.marshall()),
+            )
 
         if gravity_anomaly or stem_temperature_anomaly or air_temperature_anomaly:
             sleep_interval = SLEEP_TIME_MIN

@@ -52,6 +52,7 @@ class LDE:
 
         self.data_policy = DataPolicy(
             local_address=address,
+            mqtt_client=self.mqtt_client,
             influx_client=self.influx_client,
             sleep_times={},
             aggregated_movement={},
