@@ -233,11 +233,13 @@ class DataPolicy:
             return False
 
         temperature_reference_cold = compute_temperature(
-            packet.temperature_reference[0]
+            packet.temperature_reference_cold
         )
-        temperature_reference_hot = compute_temperature(packet.temperature_reference[1])
-        temperature_heat_cold = compute_temperature(packet.temperature_heat[0])
-        temperature_heat_hot = compute_temperature(packet.temperature_heat[1])
+        temperature_reference_hot = compute_temperature(
+            packet.temperature_reference_hot
+        )
+        temperature_heat_cold = compute_temperature(packet.temperature_heat_cold)
+        temperature_heat_hot = compute_temperature(packet.temperature_heat_hot)
         delta_cold = abs(temperature_heat_cold - temperature_reference_cold)
         delta_hot = abs(temperature_heat_hot - temperature_reference_hot)
 
