@@ -49,17 +49,30 @@ class Aggregator:
         self.influx_client.close()
 
     def _aggregate_movement(self) -> Dict[str, float]:
+        logging.info("Aggregating movement data")
+
         x_derivs: List[int] = []
         y_derivs: List[int] = []
         z_derivs: List[int] = []
-        data: ResultSet = self.influx_client.query(
-            f'SELECT "x_derivation", "y_derivation", "z_derivation" FROM "gravity" WHERE time > now() - {ANALYSIS_INTERVAL}'
-        )
+
+        try:
+            data: ResultSet = self.influx_client.query(
+                f'SELECT "x_derivation", "y_derivation", "z_derivation" FROM "gravity" WHERE time > now() - {ANALYSIS_INTERVAL}'
+            )
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
+            return {}
 
         for datapoint in data.get_points("gravity"):
             x_derivs.append(datapoint["x_derivation"])
             y_derivs.append(datapoint["y_derivation"])
             z_derivs.append(datapoint["z_derivation"])
+
+        if not x_derivs or not y_derivs or not z_derivs:
+            logging.debug(
+                f"No movement data: [x: {len(x_derivs)}, y: {len(y_derivs)}, z: {len(z_derivs)}]"
+            )
+            return {}
 
         mean_x = mean(x_derivs)
         stdev_x = stdev(x_derivs, mean_x)
@@ -68,7 +81,7 @@ class Aggregator:
         mean_z = mean(z_derivs)
         stdev_z = stdev(z_derivs, mean_z)
 
-        return {
+        aggregated = {
             "mean_x": mean_x,
             "stdev_x": stdev_x,
             "mean_y": mean_y,
@@ -77,10 +90,20 @@ class Aggregator:
             "stdev_z": stdev_z,
         }
 
+        logging.debug(f"Aggreagated movement data: {aggregated}")
+
+        return aggregated
+
     def _aggregate_temperature(self) -> Dict[str, float]:
-        data: ResultSet = self.influx_client.query(
-            f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {ANALYSIS_INTERVAL}'
-        )
+        logging.info("Aggregating temperature data")
+
+        try:
+            data: ResultSet = self.influx_client.query(
+                f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > now() - {ANALYSIS_INTERVAL}'
+            )
+        except influx.client.InfluxDBServerError as err:
+            logging.error(f"Influxdb error: {err}")
+            return {}
 
         reference_probe_cold: List[float] = []
         reference_probe_hot: List[float] = []
@@ -92,6 +115,17 @@ class Aggregator:
             reference_probe_hot.append(datapoint["ttt_reference_probe_hot"])
             heat_probe_cold.append(datapoint["ttt_heat_probe_cold"])
             heat_probe_hot.append(datapoint["ttt_heat_probe_hot"])
+
+        if (
+            not reference_probe_cold
+            or not reference_probe_hot
+            or not heat_probe_cold
+            or not heat_probe_hot
+        ):
+            logging.debug(
+                f"No temperature data: [ref_cold: {len(reference_probe_cold)}, ref_hot: {len(reference_probe_hot)}, heat_cold: {len(heat_probe_cold)}, heat_hot: {len(heat_probe_hot)}]"
+            )
+            return {}
 
         deltas_cold: List[float] = [
             abs(heat - reference)
@@ -105,22 +139,36 @@ class Aggregator:
         ]
         stdev_delta_hot = stdev(deltas_hot)
 
-        return {
+        aggregated_data = {
             "stdev_delta_cold": stdev_delta_cold,
             "stdev_delta_hot": stdev_delta_hot,
         }
 
+        logging.debug(f"Aggreagated temperature data: {aggregated_data}")
+
+        return aggregated_data
+
     def start(self) -> None:
+        logging.info("Starting data aggregation")
+
         while True:
             aggregated_movement = self._aggregate_movement()
-            self.mqtt_client.publish(
-                "global/movement", payload=json.dumps(aggregated_movement)
-            )
+            if aggregated_movement:
+                logging.debug(f"Sending movement data: {aggregated_movement}")
+                self.mqtt_client.publish(
+                    "global/movement", payload=json.dumps(aggregated_movement)
+                )
+            else:
+                logging.debug("No movement data to send")
 
             aggregated_temperature = self._aggregate_temperature()
-            self.mqtt_client.publish(
-                "global/temperature", payload=json.dumps(aggregated_temperature)
-            )
+            if aggregated_temperature:
+                logging.debug(f"Sending temperature data: {aggregated_temperature}")
+                self.mqtt_client.publish(
+                    "global/temperature", payload=json.dumps(aggregated_temperature)
+                )
+            else:
+                logging.debug("No temperature data to send")
 
             time.sleep(SLEEP_TIME)
 
