@@ -53,6 +53,7 @@ class LDE:
         self.data_policy = DataPolicy(
             local_address=address,
             influx_client=self.influx_client,
+            sleep_times={},
             aggregated_movement={},
             aggregated_temperature={},
         )
@@ -139,9 +140,13 @@ class LDE:
     def _handle_global_state(self, message: mqtt.MQTTMessage) -> None:
         logging.debug("Received global state message")
         if "movement" in message.topic:
-            logging.debug(f"Received aggregated movement data: {message.payload}")
             data: Dict[str, float] = json.loads(message.payload)
+            logging.debug(f"Received aggregated movement data: {data}")
             self.data_policy.aggregated_movement = data
+        elif "temperature" in message.topic:
+            data: Dict[str, float] = json.loads(message.payload)
+            logging.debug(f"Received aggregated temperature data: {data}")
+            self.data_policy.aggregated_temperature = data
         else:
             logging.error(f"Unknown topic: {message.topic}")
 

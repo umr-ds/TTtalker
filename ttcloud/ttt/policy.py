@@ -38,6 +38,7 @@ CRITICAL_TEMPERATURE = 50
 class DataPolicy:
     local_address: TTAddress
     influx_client: influx.InfluxDBClient
+    sleep_times: Dict[int, int]
     aggregated_movement: Dict[str, float]
     aggregated_temperature: Dict[str, float]
 
@@ -93,44 +94,16 @@ class DataPolicy:
             f"Linear regression: [Coefficients: {reg.coef_}, intercept: {reg.intercept_}]"
         )
 
-        try:
-            sleep_time = next(
-                self.influx_client.query(
-                    f'SELECT last("sleep_time") FROM "sleep_time" WHERE ("treetalker" = \'{sender_address}\')'
-                ).get_points("power")
-            )[
-                "last"
-            ]  # I hate this monstrosity and I hate influx for making me do this...
-        except StopIteration:
-            logging.debug("No previous sleep time present")
-            sleep_time = SLEEP_TIME_DEFAULT
-        except influx.client.InfluxDBServerError as err:
-            logging.error(f"Influxdb error: {err}")
-            sleep_time = SLEEP_TIME_DEFAULT
+        sleep_time = self.sleep_times.get(sender_address, SLEEP_TIME_DEFAULT)
+        logging.debug(f"Retrieved sleep time: {sleep_time}")
 
         sleep_time = int(
             sleep_time
             + (RDE * (3700 - reg.predict([[int(time.time()) + (3600 * 48)]])[0]))
         )
-
         logging.debug(f"Computed sleep time: {sleep_time}")
 
-        influx_data = [
-            {
-                "measurement": "sleep_time",
-                "tags": {
-                    "treetalker": sender_address,
-                },
-                "fields": {
-                    "sleep_time": sleep_time,
-                },
-            },
-        ]
-
-        try:
-            self.influx_client.write_points(influx_data)
-        except influx.client.InfluxDBServerError as err:
-            logging.error(f"Influxdb error: {err}")
+        self.sleep_times[sender_address] = sleep_time
 
         return sleep_time
 
@@ -228,9 +201,12 @@ class DataPolicy:
     def _evaluate_stem_temperature(
         self, packet: Union[DataPacketRev31, DataPacketRev32]
     ) -> bool:
-        if not self.aggregated_movement:
+        logging.info("Evaluating stem temperature")
+        if not self.aggregated_temperature:
             logging.info("Haven't received any aggregated temperature data yet.")
             return False
+        else:
+            logging.debug(f"Aggregated temperature data: {self.aggregated_temperature}")
 
         temperature_reference_cold = compute_temperature(
             packet.temperature_reference_cold
@@ -269,12 +245,12 @@ class DataPolicy:
             or not heat_probe_hot
         ):
             logging.debug(
-                f"No historical temperature data present: [reference_probe_cold: {reference_probe_cold}, reference_probe_hot: {reference_probe_hot}, heat_probe_cold: {heat_probe_cold}, heat_probe_hot: {heat_probe_hot}]"
+                f"No historical temperature data present: [reference_probe_cold: {len(reference_probe_cold)}, reference_probe_hot: {len(reference_probe_hot)}, heat_probe_cold: {len(heat_probe_cold)}, heat_probe_hot: {len(heat_probe_hot)}]"
             )
             return False
 
         logging.debug(
-            f"Historical temperature data: [reference_probe_cold: {reference_probe_cold}, reference_probe_hot: {reference_probe_hot}, heat_probe_cold: {heat_probe_cold}, heat_probe_hot: {heat_probe_hot}]"
+            f"Historical temperature data: [reference_probe_cold: {len(reference_probe_cold)}, reference_probe_hot: {len(reference_probe_hot)}, heat_probe_cold: {len(heat_probe_cold)}, heat_probe_hot: {len(heat_probe_hot)}]"
         )
 
         deltas_cold: List[float] = [
