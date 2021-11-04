@@ -134,6 +134,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "-i", "--influx", help="Address of the influxdb", default="localhost"
     )
+    parser.add_argument(
+        "-bp",
+        "--broker-port",
+        help="Port of the MQTT broker",
+        default=1883,
+        type=int,
+        dest="broker_port",
+    )
     args = parser.parse_args()
 
     if args.verbose:
