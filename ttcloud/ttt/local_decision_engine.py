@@ -171,10 +171,8 @@ class LDE:
         if isinstance(packet, TTHeloPacket):
             self._on_helo(packet=packet)
             return
-        elif isinstance(packet, DataPacketRev31):
-            reply = self._on_data_rev_3_1(packet=packet)
-        elif isinstance(packet, DataPacketRev32):
-            reply = self._on_data_rev_3_2(packet=packet)
+        elif isinstance(packet, DataPacketRev31) or isinstance(packet, DataPacketRev32):
+            reply = self._on_data(packet=packet)
         elif isinstance(packet, LightSensorPacket):
             reply = self._on_light(packet=packet)
         else:
@@ -199,22 +197,9 @@ class LDE:
             logging.debug(f"Sending connection request to backend: {request}")
             self.mqtt_client.publish(topic="helo/request", payload=json.dumps(request))
 
-    def _on_data_rev_3_2(self, packet: DataPacketRev32) -> TTPacket:
-        reply = self.data_policy.evaluate_3_2(packet)
-        reply.time_slot = self.connected_clients.get(reply.receiver_address, 0)
-
-        packet_data = packet.to_influx_json()
-        logging.debug(f"Sending data to influx: {packet_data}")
-
-        try:
-            self.influx_client.write_points(packet_data)
-        except influx.client.InfluxDBServerError as err:
-            logging.error(f"Influxdb error: {err}")
-
-        return reply
-
-    def _on_data_rev_3_1(self, packet: DataPacketRev31) -> TTPacket:
-        reply = self.data_policy.evaluate_3_1(packet)
+    def _on_data(self, packet: Union[DataPacketRev31, DataPacketRev32]) -> TTPacket:
+        logging.debug("Received data packet")
+        reply = self.data_policy.evaluate(packet)
         reply.time_slot = self.connected_clients.get(reply.receiver_address, 0)
 
         packet_data = packet.to_influx_json()

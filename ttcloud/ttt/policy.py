@@ -297,39 +297,16 @@ class DataPolicy:
 
         return anomaly
 
-    def evaluate_3_2(self, packet: DataPacketRev32) -> TTCommand1:
-        sleep_interval: int = max(
-            self._evaluate_battery_3_2(packet=packet), SLEEP_TIME_MIN
-        )
-
-        logging.debug(f"Checking gravity data")
-        gravity_anomaly = self._evaluate_gravity(packet=packet)
-        logging.debug(f"Checking stem temperature")
-        stem_temperature_anomaly = self._evaluate_stem_temperature(packet=packet)
-        logging.debug(f"Checking air temperature")
-        air_temperature_anomaly = self._evaluate_air_temperature(packet=packet)
-
-        if gravity_anomaly or stem_temperature_anomaly or air_temperature_anomaly:
-            sleep_interval = SLEEP_TIME_MIN
-
-        heating = int(sleep_interval / 6)
-
-        return TTCommand1(
-            receiver_address=packet.sender_address,
-            sender_address=self.local_address,
-            command=32,
-            time=int(time.time()),
-            unknown=0,
-            sleep_interval=sleep_interval,
-            time_slot_length=TIME_SLOT_LENGTH,
-            time_slot=0,
-            heating=heating,
-        )
-
-    def evaluate_3_1(self, packet: DataPacketRev31) -> TTCommand1:
-        sleep_interval: int = max(
-            self._evaluate_battery_3_1(packet=packet), SLEEP_TIME_MIN
-        )
+    def evaluate(self, packet: Union[DataPacketRev31, DataPacketRev32]) -> TTCommand1:
+        logging.debug("Computing sleep time")
+        if isinstance(packet, DataPacketRev31):
+            sleep_interval: int = max(
+                self._evaluate_battery_3_1(packet=packet), SLEEP_TIME_MIN
+            )
+        else:
+            sleep_interval: int = max(
+                self._evaluate_battery_3_2(packet=packet), SLEEP_TIME_MIN
+            )
 
         logging.debug(f"Checking gravity data")
         gravity_anomaly = self._evaluate_gravity(packet=packet)
