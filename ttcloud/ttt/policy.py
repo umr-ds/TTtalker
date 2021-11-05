@@ -106,6 +106,8 @@ class DataPolicy:
         )
         logging.debug(f"Computed sleep time: {sleep_time}")
 
+        sleep_time = max(sleep_time, SLEEP_TIME_MIN)
+
         self.sleep_times[sender_address] = sleep_time
 
         return sleep_time
@@ -281,13 +283,9 @@ class DataPolicy:
     def evaluate(self, packet: Union[DataPacketRev31, DataPacketRev32]) -> TTCommand1:
         logging.debug("Computing sleep time")
         if isinstance(packet, DataPacketRev31):
-            sleep_interval: int = max(
-                self._evaluate_battery_3_1(packet=packet), SLEEP_TIME_MIN
-            )
+            sleep_interval: int = self._evaluate_battery_3_1(packet=packet)
         else:
-            sleep_interval: int = max(
-                self._evaluate_battery_3_2(packet=packet), SLEEP_TIME_MIN
-            )
+            sleep_interval: int = self._evaluate_battery_3_2(packet=packet)
 
         logging.debug(f"Checking gravity data")
         gravity_anomaly = self._evaluate_gravity(packet=packet)
