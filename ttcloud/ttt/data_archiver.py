@@ -16,7 +16,13 @@ import paho.mqtt.client as mqtt
 from paho.mqtt.packettypes import PacketTypes
 import influxdb as influx
 
-from ttt.packets import TTPacket, TTHeloPacket, TTCloudHeloPacket, unmarshall
+from ttt.packets import (
+    TTPacket,
+    DataPacketRev32,
+    DataPacketRev31,
+    LightSensorPacket,
+    unmarshall,
+)
 
 
 class DataArchiver:
@@ -53,7 +59,11 @@ class DataArchiver:
         packet: TTPacket = unmarshall(b64decode(message.payload))
         logging.debug(f"Unamarshalled packet: {packet}")
 
-        if isinstance(packet, TTHeloPacket) or isinstance(packet, TTCloudHeloPacket):
+        if not (
+            isinstance(packet, DataPacketRev31)
+            or isinstance(packet, DataPacketRev32)
+            or isinstance(packet, LightSensorPacket)
+        ):
             return
 
         packet_data = packet.to_influx_json()
