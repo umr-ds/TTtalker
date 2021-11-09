@@ -68,9 +68,9 @@ class Aggregator:
             y_derivs.append(datapoint["y_derivation"])
             z_derivs.append(datapoint["z_derivation"])
 
-        if not x_derivs or not y_derivs or not z_derivs:
+        if len(x_derivs) < 2 or len(y_derivs) < 2 or len(z_derivs) < 2:
             logging.debug(
-                f"No movement data: [x: {len(x_derivs)}, y: {len(y_derivs)}, z: {len(z_derivs)}]"
+                f"Insufficient movement data: [x: {len(x_derivs)}, y: {len(y_derivs)}, z: {len(z_derivs)}]"
             )
             return {}
 
@@ -117,13 +117,13 @@ class Aggregator:
             heat_probe_hot.append(datapoint["ttt_heat_probe_hot"])
 
         if (
-            not reference_probe_cold
-            or not reference_probe_hot
-            or not heat_probe_cold
-            or not heat_probe_hot
+            len(reference_probe_cold) < 2
+            or len(reference_probe_hot) < 2
+            or len(heat_probe_cold) < 2
+            or len(heat_probe_hot) < 2
         ):
             logging.debug(
-                f"No temperature data: [ref_cold: {len(reference_probe_cold)}, ref_hot: {len(reference_probe_hot)}, heat_cold: {len(heat_probe_cold)}, heat_hot: {len(heat_probe_hot)}]"
+                f"Insufficient temperature data: [ref_cold: {len(reference_probe_cold)}, ref_hot: {len(reference_probe_hot)}, heat_cold: {len(heat_probe_cold)}, heat_hot: {len(heat_probe_hot)}]"
             )
             return {}
 
