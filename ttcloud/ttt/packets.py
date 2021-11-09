@@ -201,7 +201,7 @@ class DataPacketRev32(TTPacket):
                 "measurement": "stem_temperature",
                 "tags": {
                     "treetalker": self.sender_address.address,
-                    "heating": True,
+                    "revision": 32,
                 },
                 "fields": {
                     "reference_probe_cold": self.temperature_reference_cold,
@@ -226,6 +226,7 @@ class DataPacketRev32(TTPacket):
                 "measurement": "growth",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 32,
                 },
                 "fields": {
                     "distance": self.growth_sensor,
@@ -235,6 +236,7 @@ class DataPacketRev32(TTPacket):
                 "measurement": "power",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 32,
                 },
                 "fields": {
                     "bandgap": self.adc_bandgap,
@@ -248,6 +250,7 @@ class DataPacketRev32(TTPacket):
                 "measurement": "stem_water",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 32,
                 },
                 "fields": {
                     "content": self.StWC,
@@ -257,6 +260,7 @@ class DataPacketRev32(TTPacket):
                 "measurement": "air",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 32,
                 },
                 "fields": {
                     "temperature": self.air_temperature,
@@ -267,6 +271,7 @@ class DataPacketRev32(TTPacket):
                 "measurement": "gravity",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 32,
                 },
                 "fields": {
                     "x_mean": self.gravity_x_mean,
@@ -384,7 +389,7 @@ class DataPacketRev31(TTPacket):
                 "measurement": "stem_temperature",
                 "tags": {
                     "treetalker": self.sender_address.address,
-                    "heating": False,
+                    "revision": 31,
                 },
                 "fields": {
                     "reference_probe_cold": self.temperature_reference_cold,
@@ -409,6 +414,7 @@ class DataPacketRev31(TTPacket):
                 "measurement": "growth",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 31,
                 },
                 "fields": {
                     "distance": self.growth_sensor,
@@ -418,6 +424,7 @@ class DataPacketRev31(TTPacket):
                 "measurement": "power",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 31,
                 },
                 "fields": {
                     "voltage": self.voltage,
@@ -430,6 +437,7 @@ class DataPacketRev31(TTPacket):
                 "measurement": "stem_water",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 31,
                 },
                 "fields": {
                     "xmc": self.moisture,
@@ -439,6 +447,7 @@ class DataPacketRev31(TTPacket):
                 "measurement": "air",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 31,
                 },
                 "fields": {
                     "temperature": self.air_temperature,
@@ -449,6 +458,7 @@ class DataPacketRev31(TTPacket):
                 "measurement": "gravity",
                 "tags": {
                     "treetalker": self.sender_address.address,
+                    "revision": 31,
                 },
                 "fields": {
                     "x_mean": self.gravity_x_mean,
