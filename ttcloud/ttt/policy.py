@@ -115,6 +115,11 @@ class DataPolicy:
     def _evaluate_position(
         self, packet: DataPacketRev32, means: Dict[str, List[int]]
     ) -> bool:
+        for dimension, values in means.items():
+            if len(values) < 2:
+                logging.debug(f"Dimension {dimension} only has {len(values)} values")
+                return False
+
         mean_x = mean(means["x"])
         stdev_x = stdev(means["x"])
         mean_y = mean(means["y"])
