@@ -20,7 +20,9 @@ from ttt.address import TTAddress
 
 
 class LoRaParser(LoRa):
-    def __init__(self, verbose: bool, broker_address: str, address: TTAddress):
+    def __init__(
+        self, verbose: bool, broker_address: str, address: TTAddress, respond: bool
+    ):
         LoRa.__init__(self=self, verbose=verbose)
 
         self.address = address
@@ -30,6 +32,9 @@ class LoRaParser(LoRa):
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
         self.mqtt_client.subscribe(f"command/{self.address.address}")
+
+        self.respond = respond
+        logging.debug(f"Will respond to packages: {self.respond}")
 
     def __enter__(self) -> LoRaParser:
 
@@ -104,7 +109,8 @@ class LoRaParser(LoRa):
     ) -> None:
         logging.debug(f"Received MQTT Message on topic {message.topic}")
         packet = unmarshall(b64decode(message.payload))
-        self.send_packet(packet)
+        if self.respond:
+            self.send_packet(packet)
 
 
 if __name__ == "__main__":
@@ -112,6 +118,12 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument(
         "-b", "--broker", help="Address of the MQTT broker", default="localhost"
+    )
+    parser.add_argument(
+        "-n",
+        "--no-response",
+        help="Don't actually send the response packet",
+        action="store_false",
     )
     args = parser.parse_args()
 
@@ -130,6 +142,9 @@ if __name__ == "__main__":
     )
 
     with LoRaParser(
-        verbose=args.verbose, broker_address=args.broker, address=generate_tt_address()
+        verbose=args.verbose,
+        broker_address=args.broker,
+        address=generate_tt_address(),
+        respond=args.no_response,
     ) as lora_parser:
         lora_parser.start()
