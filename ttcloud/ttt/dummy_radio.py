@@ -98,7 +98,7 @@ class DummyRadio:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Component sends dummy packets via MQTT to test other components"
+        description="Send dummy packets via MQTT to test other components"
     )
     parser.add_argument(
         "-b", "--broker", help="Address of the MQTT broker", default="localhost"

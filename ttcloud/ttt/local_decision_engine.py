@@ -238,7 +238,9 @@ class LDE:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process some integers.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate sensor data from connected nodes to find anomalies."
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument(
         "-b", "--broker", help="Address of the MQTT broker", default="localhost"

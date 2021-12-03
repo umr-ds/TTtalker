@@ -174,7 +174,7 @@ class Aggregator:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process some integers.")
+    parser = argparse.ArgumentParser(description="Aggregate historical sensor data")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument(
         "-b", "--broker", help="Address of the MQTT broker", default="localhost"

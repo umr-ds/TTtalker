@@ -114,7 +114,7 @@ class LoRaParser(LoRa):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process some integers.")
+    parser = argparse.ArgumentParser(description="Operate the LoRa-radio")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument(
         "-b", "--broker", help="Address of the MQTT broker", default="localhost"
