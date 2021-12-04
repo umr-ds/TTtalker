@@ -34,11 +34,13 @@ class LDE:
         influx_address: str,
         address: TTAddress,
         respond: bool,
+        always_answer: bool,
     ):
         self.address = address
         logging.debug(f"Own address: {self.address}")
 
         self.respond = respond
+        self.always_answer = always_answer
 
         self.mqtt_client = mqtt.Client(f"lde-{address}")
         self.mqtt_client.connect(broker_address)
@@ -161,7 +163,7 @@ class LDE:
             logging.debug(
                 f"Received multicast message addressed to {packet.receiver_address.address}"
             )
-        elif packet.receiver_address == self.address:
+        elif packet.receiver_address == self.address or self.always_answer:
             logging.debug("Received unicast message addressed to us")
             if packet.sender_address not in self.connected_clients:
                 logging.debug(
@@ -254,6 +256,12 @@ if __name__ == "__main__":
         help="Don't actually send the response packet",
         action="store_false",
     )
+    parser.add_argument(
+        "-a",
+        "--always_answer",
+        help="Don't check if we are the intended recipient of a packet",
+        action="store_true",
+    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -272,5 +280,6 @@ if __name__ == "__main__":
         influx_address=args.influx,
         address=generate_tt_address(),
         respond=args.no_response,
+        always_answer=args.always_answer,
     ) as lde:
         lde.start()
