@@ -33,8 +33,7 @@ class ResponseAnalyser:
         )
         self.mqtt_client.connect(host=broker_address, port=broker_port)
         self.mqtt_client.on_message = self.on_message
-        self.mqtt_client.subscribe("receive/#")
-        self.mqtt_client.subscribe("command/#")
+        self.mqtt_client.subscribe("sniffer/#")
 
         self.influx_client = influx.InfluxDBClient(host=influx_address, port=8086)
 
@@ -60,10 +59,12 @@ class ResponseAnalyser:
     ) -> None:
         logging.debug(f"Received message on {message.topic}")
 
-        if "receive" in message.topic:
-            self._handle_receive(message)
-        elif "command" in message.topic:
-            self._handle_command(message)
+        if "ttcloud" in message.topic:
+            logging.debug("Received command from ttcloud")
+            self._handle_receive(message, responder="ttcloud")
+        elif "ttt" in message.topic:
+            logging.debug("Received command from ttt")
+            self._handle_receive(message, responder="ttt")
         else:
             logging.error(f"Received message from unknown MQTT-topic: {message.topic}")
 
@@ -102,37 +103,22 @@ class ResponseAnalyser:
         except influx.client.InfluxDBServerError as err:
             logging.error(f"Influxdb error: {err}")
 
-    def _handle_receive(self, message: mqtt.MQTTMessage) -> None:
+    def _handle_receive(self, message: mqtt.MQTTMessage, responder: str) -> None:
         packet: TTPacket = unmarshall(b64decode(message.payload))
         now = time.time()
 
         if isinstance(packet, TTCommand1):
             self._response_time(
-                packet=packet, responder="ttcloud", now=now, packet_type="data"
+                packet=packet, responder=responder, now=now, packet_type="data"
             )
         elif isinstance(packet, TTCommand2):
             self._response_time(
-                packet=packet, responder="ttcloud", now=now, packet_type="light"
+                packet=packet, responder=responder, now=now, packet_type="light"
             )
         elif isinstance(packet, DataPacketRev31) or isinstance(packet, DataPacketRev32):
             self.waiting_for_reply[packet.sender_address, "data"] = now
         elif isinstance(packet, LightSensorPacket):
             self.waiting_for_reply[packet.sender_address, "light"] = now
-        else:
-            logging.debug(f"Not interested in packet type: {packet.__class__.__name__}")
-
-    def _handle_command(self, message: mqtt.MQTTMessage) -> None:
-        packet: TTPacket = unmarshall(b64decode(message.payload))
-        now = time.time()
-
-        if isinstance(packet, TTCommand1):
-            self._response_time(
-                packet=packet, responder="ttt", now=now, packet_type="data"
-            )
-        elif isinstance(packet, TTCommand2):
-            self._response_time(
-                packet=packet, responder="ttt", now=now, packet_type="light"
-            )
         else:
             logging.debug(f"Not interested in packet type: {packet.__class__.__name__}")
 

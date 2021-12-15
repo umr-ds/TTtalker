@@ -14,14 +14,14 @@ from ttt.SX127x.LoRa import LoRa
 from ttt.SX127x.board_config import BOARD
 from ttt.SX127x.constants import MODE, BW, CODING_RATE
 
-from ttt.packets import TTPacket, unmarshall
+from ttt.packets import TTPacket, unmarshall, TTCommand1, TTCommand2
 from util import generate_tt_address
 from ttt.address import TTAddress
 
 
 class LoRaParser(LoRa):
     def __init__(
-        self, verbose: bool, broker_address: str, address: TTAddress, respond: bool
+        self, verbose: bool, broker_address: str, address: TTAddress, respond: bool, sniffer: bool, gateway: str
     ):
         LoRa.__init__(self=self, verbose=verbose)
 
@@ -31,10 +31,13 @@ class LoRaParser(LoRa):
         self.mqtt_client = mqtt.Client("rci")
         self.mqtt_client.connect(broker_address)
         self.mqtt_client.on_message = self.on_message
-        self.mqtt_client.subscribe(f"command/{self.address.address}")
 
         self.respond = respond
         logging.debug(f"Will respond to packages: {self.respond}")
+        self.sniffer = sniffer
+        logging.debug(f"Running in sniffer-mode: {self.sniffer}")
+        self.gateway = gateway
+        logging.debug(f"Gateway type: {self.gateway}")
 
     def __enter__(self) -> LoRaParser:
 
@@ -57,6 +60,8 @@ class LoRaParser(LoRa):
         self.reset_ptr_rx()
         self.set_mode(MODE.RXCONT)
 
+        if not self.sniffer:
+            self.mqtt_client.subscribe(f"command/{self.address.address}")
         self.mqtt_client.loop_start()
 
         return self
@@ -79,6 +84,18 @@ class LoRaParser(LoRa):
         logging.debug(f"RAW Receive: {bytes(payload).hex()}")
         packet: TTPacket = unmarshall(bytes(payload))
         logging.debug(f"Parsed Receive: {packet}")
+
+        if self.sniffer:
+            self.mqtt_client.publish(
+                topic=f"sniffer/{self.gateway}",
+                payload=b64encode(packet.marshall()),
+            )
+            return
+
+        if isinstance(packet, TTCommand1) or isinstance(packet, TTCommand2):
+            logging.debug("We are not interested in command-packets")
+            return
+
         self.mqtt_client.publish(
             topic=f"receive/{self.address.address}",
             payload=b64encode(packet.marshall()),
@@ -125,6 +142,15 @@ if __name__ == "__main__":
         help="Don't actually send the response packet",
         action="store_false",
     )
+    parser.add_argument(
+        "-s",
+        "--sniffer",
+        help="Run in passive sniffer-mode",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-g", "--gateway", help="Type of gateway currently running", default="ttcloud"
+    )
     args = parser.parse_args()
 
     BOARD.setup()
@@ -146,5 +172,7 @@ if __name__ == "__main__":
         broker_address=args.broker,
         address=generate_tt_address(),
         respond=args.no_response,
+        sniffer=args.sniffer,
+        gateway=args.gateway
     ) as lora_parser:
         lora_parser.start()
