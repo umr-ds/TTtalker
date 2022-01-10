@@ -21,7 +21,13 @@ from ttt.address import TTAddress
 
 class LoRaParser(LoRa):
     def __init__(
-        self, verbose: bool, broker_address: str, address: TTAddress, respond: bool, sniffer: bool, gateway: str
+        self,
+        verbose: bool,
+        broker_address: str,
+        address: TTAddress,
+        respond: bool,
+        sniffer: bool,
+        gateway: str,
     ):
         LoRa.__init__(self=self, verbose=verbose)
 
@@ -173,6 +179,6 @@ if __name__ == "__main__":
         address=generate_tt_address(),
         respond=args.no_response,
         sniffer=args.sniffer,
-        gateway=args.gateway
+        gateway=args.gateway,
     ) as lora_parser:
         lora_parser.start()

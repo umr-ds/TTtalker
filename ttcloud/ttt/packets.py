@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 from struct import unpack, pack
-from typing import Dict, Callable, List, Any
+from typing import Dict, Callable, List, Any, Tuple
 
 from ttt.util import (
     compute_battery_voltage_rev_3_2,
@@ -104,16 +104,16 @@ class DataPacketRev32(TTPacket):
     number_of_bits: int
     air_relative_humidity: int
     air_temperature: int
-    gravity_x_mean: int
-    gravity_y_mean: int
     gravity_z_mean: int
-    gravity_x_derivation: int
-    gravity_y_derivation: int
     gravity_z_derivation: int
-    StWC: int
-    adc_volt_bat: int
+    gravity_y_mean: int
+    gravity_y_derivation: int
+    gravity_x_mean: int
+    gravity_x_derivation: int
     temperature_reference_hot: int
     temperature_heat_hot: int
+    StWC: int
+    adc_volt_bat: int
     packet_type: int = 77
 
     def __eq__(self, other) -> bool:
@@ -472,12 +472,28 @@ class DataPacketRev31(TTPacket):
         ]
 
 
+LIGHT_SENSOR_CALIBRATION_PARAMETERS: Dict[int, Tuple[float, float]] = {
+    610: (-312.45, 1.6699),
+    680: (-561.56, 1.5199),
+    730: (-1511.2, 1.6209),
+    760: (-1012.5, 1.4549),
+    810: (91.58, 0.8414),
+    860: (334.88, 0.531),
+    450: (-212.62, 0.4562),
+    500: (-232.13, 0.6257),
+    550: (-842.1, 1.0546),
+    570: (-666.72, 1.0462),
+    600: (-328.08, 0.8654),
+    650: (202.77, 0.7829),
+}
+
+
 @dataclass
 class LightSensorPacket(TTPacket):
     packet_number: int
     timestamp: int
-    AS7263: Dict[int, float]
-    AS7262: Dict[int, float]
+    AS7263: Dict[int, int]
+    AS7262: Dict[int, int]
     integration_time: int
     gain: int
     packet_type: int = 73
@@ -485,11 +501,17 @@ class LightSensorPacket(TTPacket):
     def __eq__(self, other) -> bool:
         return isinstance(other, LightSensorPacket) and self.__dict__ == other.__dict__
 
+    @staticmethod
+    def convert(wavelength: int, value: int) -> float:
+        return LIGHT_SENSOR_CALIBRATION_PARAMETERS[wavelength][0] + (
+            LIGHT_SENSOR_CALIBRATION_PARAMETERS[wavelength][1] * value
+        )
+
     @classmethod
     def unmarshall(
         cls, receiver_address: TTAddress, sender_address: TTAddress, raw_stream: BytesIO
     ) -> LightSensorPacket:
-        fields = unpack("=BIffffffffffffBB", raw_stream.read())
+        fields = unpack("=BIIIIIIIIIIIIIBB", raw_stream.read())
         return LightSensorPacket(
             receiver_address=receiver_address,
             sender_address=sender_address,
@@ -517,7 +539,7 @@ class LightSensorPacket(TTPacket):
 
     def marshall(self) -> bytes:
         return pack(
-            "=IIBBIffffffffffffBB",
+            "=IIBBIIIIIIIIIIIIIBB",
             self.receiver_address.address,
             self.sender_address.address,
             self.packet_type,
@@ -549,12 +571,12 @@ class LightSensorPacket(TTPacket):
                     "integration_time": self.integration_time,
                 },
                 "fields": {
-                    "610": self.AS7263[610],
-                    "680": self.AS7263[680],
-                    "730": self.AS7263[730],
-                    "760": self.AS7263[760],
-                    "810": self.AS7263[810],
-                    "860": self.AS7263[860],
+                    "610": LightSensorPacket.convert(610, self.AS7263[610]),
+                    "680": LightSensorPacket.convert(680, self.AS7263[680]),
+                    "730": LightSensorPacket.convert(730, self.AS7263[730]),
+                    "760": LightSensorPacket.convert(760, self.AS7263[760]),
+                    "810": LightSensorPacket.convert(810, self.AS7263[810]),
+                    "860": LightSensorPacket.convert(860, self.AS7263[860]),
                 },
             },
             {
@@ -565,12 +587,12 @@ class LightSensorPacket(TTPacket):
                     "integration_time": self.integration_time,
                 },
                 "fields": {
-                    "450": self.AS7262[450],
-                    "500": self.AS7262[500],
-                    "550": self.AS7262[550],
-                    "570": self.AS7262[570],
-                    "600": self.AS7262[600],
-                    "650": self.AS7262[650],
+                    "450": LightSensorPacket.convert(450, self.AS7262[450]),
+                    "500": LightSensorPacket.convert(500, self.AS7262[500]),
+                    "550": LightSensorPacket.convert(550, self.AS7262[550]),
+                    "570": LightSensorPacket.convert(570, self.AS7262[570]),
+                    "600": LightSensorPacket.convert(600, self.AS7262[600]),
+                    "650": LightSensorPacket.convert(650, self.AS7262[650]),
                 },
             },
         ]
