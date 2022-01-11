@@ -24,7 +24,11 @@ def get_data(influx_address: str, out_path: str):
         tags={"packet_type": "data", "responder": "ttcloud"}
     ):
         df = df.append(
-            {"Type": "Data", "Responder": "ttcloud", "Time": datapoint["response_time"]},
+            {
+                "Type": "Data",
+                "Responder": "ttcloud",
+                "Time": datapoint["response_time"],
+            },
             ignore_index=True,
         )
 

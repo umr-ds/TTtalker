@@ -2,10 +2,14 @@
 
 import argparse
 import requests
+import pickle
 import influxdb as influx
 from datetime import datetime
 from typing import List, Tuple, Dict, Any, Set
 from ttt import packets
+
+
+TT_CLOUDS = ["C2030115", "C2030116", "C2030117", "C2030119", "C2030123"]
 
 
 def parse_date(date: str) -> int:
@@ -99,20 +103,44 @@ def upload(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Download historical data and insert it into influx")
+    parser = argparse.ArgumentParser(
+        description="Download historical data and do stuff with it"
+    )
     parser.add_argument(
         "-a", "--address", help="Address of the server hosting the data"
     )
+    parser.add_argument("action", help="One of [put, dump, upload]")
+    parser.add_argument(
+        "-p",
+        "--pickle",
+        help="If action is 'dump' or 'upload', filename for the pickled data",
+    )
     args = parser.parse_args()
 
-    influx_client = influx.InfluxDBClient(host="localhost", port=8086)
-    influx_client.create_database("historical")
-    influx_client.switch_database("historical")
+    if args.action == "put" or args.action == "upload":
+        influx_client = influx.InfluxDBClient(host="localhost", port=8086)
+        influx_client.create_database("historical")
+        influx_client.switch_database("historical")
 
-    ttclouds = ["C2030115", "C2030116", "C2030117", "C2030119", "C2030123"]
+        if args.action == "put":
+            for ttcloud in TT_CLOUDS:
+                tt_packets = download(ttcloud=ttcloud, address=args.address)
+                upload(influx_client, tt_packets, ttcloud)
+        else:
+            with open(args.pickle, "rb") as f:
+                tt_packets: List[Tuple[int, packets.TTPacket]] = pickle.load(f)
+            upload(influx_client, tt_packets, "dump")
 
-    for ttcloud in ttclouds:
-        tt_packets = download(ttcloud=ttcloud, address=args.address)
-        upload(influx_client, tt_packets, ttcloud)
+        influx_client.close()
+    elif args.action == "dump":
+        all_packets: List[Tuple[int, packets.TTPacket]] = []
+        for ttcloud in TT_CLOUDS:
+            all_packets += download(ttcloud=ttcloud, address=args.address)
 
-    influx_client.close()
+        print(f"Total number of packets: {len(all_packets)}")
+
+        with open(args.pickle, "wb") as f:
+            pickle.dump(all_packets, f, pickle.HIGHEST_PROTOCOL)
+
+    else:
+        print(f"Unknown action '{args.action}'")

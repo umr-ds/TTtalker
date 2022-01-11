@@ -278,3 +278,6 @@ Thumbs.db
 *.code-workspace
 
 # End of https://www.toptal.com/developers/gitignore/api/python,vscode,jetbrains+all,macos
+
+*.pickle
+*.pdf
