@@ -9,7 +9,7 @@ from typing import List, Tuple, Dict, Any, Set
 from ttt import packets
 
 
-TT_CLOUDS = ["C2030115", "C2030116", "C2030117", "C2030119", "C2030123"]
+TT_CLOUDS = ["C2030115"]
 
 
 def parse_date(date: str) -> int:
@@ -85,7 +85,7 @@ def upload(
     for packet in tt_packets:
         influx_json = packet[1].to_influx_json()
         for point in influx_json:
-            point["timestamp"] = packet[0]
+            point["time"] = packet[0]
         points += influx_json
 
     print(f"Number of packets in {ttcloud}: {len(points)}")
@@ -136,6 +136,8 @@ if __name__ == "__main__":
         all_packets: List[Tuple[int, packets.TTPacket]] = []
         for ttcloud in TT_CLOUDS:
             all_packets += download(ttcloud=ttcloud, address=args.address)
+
+        all_packets.sort(key=lambda x: x[0])
 
         print(f"Total number of packets: {len(all_packets)}")
 
