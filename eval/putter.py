@@ -7,9 +7,11 @@ import influxdb as influx
 from datetime import datetime
 from typing import List, Tuple, Dict, Any, Set
 from ttt import packets
+from tqdm import tqdm
 
 
 TT_CLOUDS = ["C2030115"]
+UPLOAD_BATCH_SIZE = 100000
 
 
 def parse_date(date: str) -> int:
@@ -18,6 +20,7 @@ def parse_date(date: str) -> int:
 
 
 def download(ttcloud: str, address: str) -> List[Tuple[int, packets.TTPacket]]:
+    print("Downloading packets")
     tt_packets: List[Tuple[int, packets.TTPacket]] = []
     unknown_types: Set[int] = set()
     cloud_address = packets.TTAddress(address=int(ttcloud, 16))
@@ -81,6 +84,7 @@ def upload(
     tt_packets: List[Tuple[int, packets.TTPacket]],
     ttcloud: str,
 ) -> None:
+    print("Uploading Packets")
     points: List[Dict[str, Any]] = []
     for packet in tt_packets:
         influx_json = packet[1].to_influx_json()
@@ -91,15 +95,21 @@ def upload(
     print(f"Number of packets in {ttcloud}: {len(points)}")
 
     if len(points) <= 100000:
+        print("#Packets < 100000 -> uploading in single batch")
         influx_client.write_points(points, time_precision="s")
         return
 
-    index = 0
-    while index + 100000 < len(points):
-        influx_client.write_points(points[index : index + 100000], time_precision="s")
-        index += 100000
+    print("Starting upload")
+    with tqdm(total=len(points)) as pbar:
+        index = 0
+        while index + UPLOAD_BATCH_SIZE < len(points):
+            influx_client.write_points(points[index: index + 100000], time_precision="s")
+            index += UPLOAD_BATCH_SIZE
+            pbar.update(UPLOAD_BATCH_SIZE)
 
     influx_client.write_points(points[index:], time_precision="s")
+
+    print("Done")
 
 
 if __name__ == "__main__":
@@ -127,6 +137,7 @@ if __name__ == "__main__":
                 tt_packets = download(ttcloud=ttcloud, address=args.address)
                 upload(influx_client, tt_packets, ttcloud)
         else:
+            print("Unpickling packets")
             with open(args.pickle, "rb") as f:
                 tt_packets: List[Tuple[int, packets.TTPacket]] = pickle.load(f)
             upload(influx_client, tt_packets, "dump")
