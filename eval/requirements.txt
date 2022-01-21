@@ -1,0 +1,4 @@
+requests
+influxdb
+treetalkertalker
+tqdm

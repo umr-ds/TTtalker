@@ -21,7 +21,9 @@ def parse_date(date: str) -> int:
     return int(time.timestamp())
 
 
-def download_single(ttcloud: str, address: str) -> Tuple[str, List[Tuple[int, packets.TTPacket]]]:
+def download_single(
+    ttcloud: str, address: str
+) -> Tuple[str, List[Tuple[int, packets.TTPacket]]]:
     print(f"Downloading packets for {ttcloud}")
     tt_packets: List[Tuple[int, packets.TTPacket]] = []
     unknown_types: Set[int] = set()
@@ -83,7 +85,9 @@ def download_single(ttcloud: str, address: str) -> Tuple[str, List[Tuple[int, pa
     return ttcloud, tt_packets
 
 
-def download(ttclouds: List[str], address: str) -> List[Tuple[str, List[Tuple[int, packets.TTPacket]]]]:
+def download(
+    ttclouds: List[str], address: str
+) -> List[Tuple[str, List[Tuple[int, packets.TTPacket]]]]:
     tt_packets: List[Tuple[str, List[Tuple[int, packets.TTPacket]]]] = []
 
     for ttcloud in tqdm(ttclouds):
@@ -121,9 +125,13 @@ def upload_single(
         index = 0
         while index + UPLOAD_BATCH_SIZE < len(points):
             influx_client.switch_database(UPLOAD_DATABASE)
-            influx_client.write_points(points[index: index + 100000], time_precision="s")
+            influx_client.write_points(
+                points[index : index + 100000], time_precision="s"
+            )
             influx_client.switch_database(ttcloud_database)
-            influx_client.write_points(points[index: index + 100000], time_precision="s")
+            influx_client.write_points(
+                points[index : index + 100000], time_precision="s"
+            )
             index += UPLOAD_BATCH_SIZE
             pbar.update(UPLOAD_BATCH_SIZE)
 
@@ -132,10 +140,15 @@ def upload_single(
     print("Done")
 
 
-def upload(influx_client: influx.InfluxDBClient, tt_packets: List[Tuple[str, List[Tuple[int, packets.TTPacket]]]]) -> None:
+def upload(
+    influx_client: influx.InfluxDBClient,
+    tt_packets: List[Tuple[str, List[Tuple[int, packets.TTPacket]]]],
+) -> None:
     influx_client.create_database(UPLOAD_DATABASE)
     for ttcloud, tt_packets in tqdm(tt_packets):
-        upload_single(influx_client=influx_client, ttcloud=ttcloud, tt_packets=tt_packets)
+        upload_single(
+            influx_client=influx_client, ttcloud=ttcloud, tt_packets=tt_packets
+        )
 
 
 if __name__ == "__main__":
@@ -159,7 +172,9 @@ if __name__ == "__main__":
     elif args.action == "upload":
         print("Unpickling packets")
         with open(args.pickle, "rb") as f:
-            tt_packets: List[Tuple[str, List[Tuple[int, packets.TTPacket]]]] = pickle.load(f)
+            tt_packets: List[
+                Tuple[str, List[Tuple[int, packets.TTPacket]]]
+            ] = pickle.load(f)
     else:
         print(f"Unknown action '{args.action}'")
         exit(1)
@@ -173,5 +188,3 @@ if __name__ == "__main__":
         print("Pickling packets")
         with open(args.pickle, "wb") as f:
             pickle.dump(tt_packets, f, pickle.HIGHEST_PROTOCOL)
-
-
