@@ -104,11 +104,11 @@ class DataPolicy:
 
         ttcloud_database = f"{UPLOAD_DATABASE}-{self.ttcloud}"
         self.influx_client.switch_database(ttcloud_database)
-        t_end = packet_time + ANALYSIS_TIME
+        t_start = packet_time - ANALYSIS_TIME
 
         try:
             data: ResultSet = self.influx_client.query(
-                f'SELECT "x_mean", "y_mean", "z_mean" FROM "gravity" WHERE time > {packet_time}s AND time < {t_end}s AND ("treetalker" = \'{packet.sender_address.address}\')'
+                f'SELECT "x_mean", "y_mean", "z_mean" FROM "gravity" WHERE time > {t_start}s AND time < {packet_time}s AND ("treetalker" = \'{packet.sender_address.address}\')'
             )
         except influx.client.InfluxDBServerError as err:
             logging.error(f"Influxdb error: {err}")
@@ -150,7 +150,7 @@ class DataPolicy:
 
         ttcloud_database = f"{UPLOAD_DATABASE}-{self.ttcloud}"
         self.influx_client.switch_database(ttcloud_database)
-        t_end = packet_time + ANALYSIS_TIME
+        t_start = packet_time - ANALYSIS_TIME
 
         temperature_reference_cold = compute_temperature(
             packet.temperature_reference_cold
@@ -165,7 +165,7 @@ class DataPolicy:
 
         try:
             data: ResultSet = self.influx_client.query(
-                f'SELECT "ttt_reference_probe_cold", "ttt_reference_probe_hot", "ttt_heat_probe_cold", "ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > {packet_time}s AND time < {t_end}s AND ("treetalker" = \'{packet.sender_address.address}\')'
+                f'SELECT "ttt_reference_probe_cold", "ttt_reference_probe_hot", "ttt_heat_probe_cold", "ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > {t_start}s AND time < {packet_time}s AND ("treetalker" = \'{packet.sender_address.address}\')'
             )
         except influx.client.InfluxDBServerError as err:
             logging.error(f"Influxdb error: {err}")

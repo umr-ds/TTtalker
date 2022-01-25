@@ -13,7 +13,7 @@ from tqdm import tqdm
 from json import dump
 
 ANALYSIS_TIME = 172800  # 2 days
-ANALYSIS_WINDOW = 86400  # 1 day
+ANALYSIS_WINDOW = 3600  # 1 hour
 UPLOAD_DATABASE = "historical"
 
 
@@ -27,11 +27,11 @@ def aggregate_movement(
     y_derivs: List[int] = []
     z_derivs: List[int] = []
 
-    t_end = packet_time + ANALYSIS_TIME
+    t_start = packet_time - ANALYSIS_TIME
 
     try:
         data: ResultSet = influx_client.query(
-            f'SELECT "x_derivation", "y_derivation", "z_derivation" FROM "gravity" WHERE time > {packet_time}s AND time < {t_end}s'
+            f'SELECT "x_derivation", "y_derivation", "z_derivation" FROM "gravity" WHERE time > {t_start}s AND time < {packet_time}s'
         )
     except influx.client.InfluxDBServerError as err:
         logging.error(f"Influxdb error: {err}")
@@ -75,11 +75,11 @@ def aggregate_temperature(
     logging.debug("Aggregating temperature data")
     influx_client.switch_database(UPLOAD_DATABASE)
 
-    t_end = packet_time + ANALYSIS_TIME
+    t_start = packet_time - ANALYSIS_TIME
 
     try:
         data: ResultSet = influx_client.query(
-            f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > {packet_time}s AND time < {t_end}s'
+            f'SELECT "ttt_reference_probe_cold","ttt_reference_probe_hot","ttt_heat_probe_cold","ttt_heat_probe_hot" FROM "stem_temperature" WHERE time > {t_start}s AND time < {packet_time}s'
         )
     except influx.client.InfluxDBServerError as err:
         logging.error(f"Influxdb error: {err}")
