@@ -198,7 +198,7 @@ if __name__ == "__main__":
                         packet=packet, packet_time=timestamp
                     )
                 else:
-                    anomalies = []
+                    anomalies = {}
                 if anomalies:
                     logging.debug("Anomaly found!")
                     dump(

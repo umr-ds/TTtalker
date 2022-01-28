@@ -158,7 +158,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-a", "--address", help="Address of the server hosting the data"
     )
-    parser.add_argument("action", help="One of [put, dump, upload]")
+    parser.add_argument("action", help="One of [put, dump, upload, count]")
     parser.add_argument(
         "-p",
         "--pickle",
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     if args.action == "put" or args.action == "dump":
         print("Downloading packets")
         tt_packets = download(ttclouds=TT_CLOUDS, address=args.address)
-    elif args.action == "upload":
+    elif args.action == "upload" or args.action == "count":
         print("Unpickling packets")
         with open(args.pickle, "rb") as f:
             tt_packets: List[
@@ -188,3 +188,8 @@ if __name__ == "__main__":
         print("Pickling packets")
         with open(args.pickle, "wb") as f:
             pickle.dump(tt_packets, f, pickle.HIGHEST_PROTOCOL)
+    elif args.action == "count":
+        total = 0
+        for _, pkts in tt_packets:
+            total += len(pkts)
+        print(f"Total number of packets: {total}")

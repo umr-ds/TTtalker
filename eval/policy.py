@@ -1,7 +1,7 @@
 import logging
 import time
 
-from typing import Union, Dict, List
+from typing import Union, Dict, List, Tuple, Any
 from collections import defaultdict
 from statistics import mean, stdev
 
@@ -40,11 +40,11 @@ class DataPolicy:
 
     def _evaluate_position(
         self, packet: DataPacketRev32, means: Dict[str, List[int]]
-    ) -> bool:
+    ) -> Tuple[bool, Dict[str, float]]:
         for dimension, values in means.items():
             if len(values) < 2:
                 logging.debug(f"Dimension {dimension} only has {len(values)} values")
-                return False
+                return False, {}
 
         mean_x = mean(means["x"])
         stdev_x = stdev(means["x"])
@@ -67,14 +67,23 @@ class DataPolicy:
             or abs(z - mean_z) > (stdev_z * CONFIDENCE)
         )
 
+        reference = {
+            "mean_x": mean_x,
+            "stdev_x": stdev_x,
+            "mean_y": mean_y,
+            "stdev_y": stdev_y,
+            "mean_z": mean_z,
+            "stdev_z": stdev_z,
+        }
+
         logging.debug(f"Detected position anomaly: {anomaly}")
 
-        return anomaly
+        return anomaly, reference
 
-    def _evaluate_movement(self, packet: DataPacketRev32) -> bool:
+    def _evaluate_movement(self, packet: DataPacketRev32) -> Tuple[bool, Dict[str, float]]:
         if not self.aggregated_movement:
             logging.info("Haven't received any aggregated movement data yet.")
-            return False
+            return False, {}
 
         x = packet.gravity_x_derivation
         y = packet.gravity_y_derivation
@@ -95,11 +104,11 @@ class DataPolicy:
 
         logging.debug(f"Detected movement anomaly: {anomaly}")
 
-        return anomaly
+        return anomaly, self.aggregated_movement
 
     def _evaluate_gravity(
         self, packet: Union[DataPacketRev31, DataPacketRev32], packet_time: int
-    ) -> bool:
+    ) -> Tuple[bool, Dict[str, Tuple[bool, Dict[str, float]]]]:
         means: Dict[str, List[int]] = defaultdict(list)
 
         ttcloud_database = f"{UPLOAD_DATABASE}-{self.ttcloud}"
@@ -112,7 +121,7 @@ class DataPolicy:
             )
         except influx.client.InfluxDBServerError as err:
             logging.error(f"Influxdb error: {err}")
-            return False
+            return False, {}
 
         for datapoint in data.get_points("gravity"):
             means["x"].append(datapoint["x_mean"])
@@ -121,30 +130,35 @@ class DataPolicy:
 
         if not means:
             logging.debug("No historical gravity data present.")
-            return False
+            return False, {}
 
-        anomaly = self._evaluate_position(
+        r_data: Dict[str, Tuple[bool, Dict[str, float]]] = {}
+        anomaly_position, reference = self._evaluate_position(
             packet=packet, means=means
-        ) or self._evaluate_movement(packet=packet)
+        )
+        r_data["position"] = (anomaly_position, reference)
+        anomaly_movement, reference = self._evaluate_movement(packet=packet)
+        r_data["movement"] = (anomaly_movement, reference)
+        anomaly = anomaly_position or anomaly_movement
 
         logging.debug(f"Detected gravity anomaly: {anomaly}")
 
-        return anomaly
+        return anomaly, r_data
 
     def _evaluate_air_temperature(
         self, packet: Union[DataPacketRev31, DataPacketRev32]
-    ) -> bool:
+    ) -> Tuple[bool, int]:
         anomaly = packet.air_temperature >= CRITICAL_TEMPERATURE * 10
         logging.debug(f"Found air temperature anomaly: {anomaly}")
-        return anomaly
+        return anomaly, CRITICAL_TEMPERATURE * 10
 
     def _evaluate_stem_temperature(
         self, packet: Union[DataPacketRev31, DataPacketRev32], packet_time: int
-    ) -> bool:
+    ) -> Tuple[bool, Dict[str, Union[float, Dict[str, float]]]]:
         logging.debug("Evaluating stem temperature")
         if not self.aggregated_temperature:
             logging.info("Haven't received any aggregated temperature data yet.")
-            return False
+            return False, {}
         else:
             logging.debug(f"Aggregated temperature data: {self.aggregated_temperature}")
 
@@ -169,7 +183,7 @@ class DataPolicy:
             )
         except influx.client.InfluxDBServerError as err:
             logging.error(f"Influxdb error: {err}")
-            return False
+            return False, {}
 
         reference_probe_cold: List[float] = []
         reference_probe_hot: List[float] = []
@@ -191,7 +205,7 @@ class DataPolicy:
             logging.debug(
                 f"No historical temperature data present: [reference_probe_cold: {len(reference_probe_cold)}, reference_probe_hot: {len(reference_probe_hot)}, heat_probe_cold: {len(heat_probe_cold)}, heat_probe_hot: {len(heat_probe_hot)}]"
             )
-            return False
+            return False, {}
 
         logging.debug(
             f"Historical temperature data: [reference_probe_cold: {len(reference_probe_cold)}, reference_probe_hot: {len(reference_probe_hot)}, heat_probe_cold: {len(heat_probe_cold)}, heat_probe_hot: {len(heat_probe_hot)}]"
@@ -215,34 +229,42 @@ class DataPolicy:
             self.aggregated_temperature["stdev_delta_hot"] * CONFIDENCE
         )
 
+        r_data: Dict[str, Union[float, Dict[str, float]]] = {
+            "delta_cold": delta_cold,
+            "delta_hot": delta_hot,
+            "mean_delta_cold": mean_delta_cold,
+            "mean_delta_hot": mean_delta_hot,
+            "aggregated": self.aggregated_temperature
+        }
+
         logging.debug(f"Detected temperature anomaly: {anomaly}")
 
-        return anomaly
+        return anomaly, r_data
 
     def evaluate(
         self, packet: Union[DataPacketRev31, DataPacketRev32], packet_time: int
-    ) -> List[str]:
-        anomalies: List[str] = []
+    ) -> Dict[str, Any]:
+        anomalies: Dict[str, Any] = {}
 
         logging.debug(f"Checking gravity data")
-        gravity_anomaly = self._evaluate_gravity(packet=packet, packet_time=packet_time)
+        gravity_anomaly, reference = self._evaluate_gravity(packet=packet, packet_time=packet_time)
         if gravity_anomaly:
             logging.debug("Detected gravity anomaly")
-            anomalies.append("gravity")
+            anomalies["gravity"] = reference
 
         logging.debug(f"Checking stem temperature")
-        stem_temperature_anomaly = self._evaluate_stem_temperature(
+        stem_temperature_anomaly, reference = self._evaluate_stem_temperature(
             packet=packet, packet_time=packet_time
         )
         if stem_temperature_anomaly:
             logging.debug("Detected stem temperature anomaly")
-            anomalies.append("stem temperature")
+            anomalies["stem temperature"] = reference
 
         logging.debug(f"Checking air temperature")
-        air_temperature_anomaly = self._evaluate_air_temperature(packet=packet)
+        air_temperature_anomaly, reference = self._evaluate_air_temperature(packet=packet)
         if air_temperature_anomaly:
             logging.debug("Detected air temperature anomaly")
-            anomalies.append("air temperature")
+            anomalies["air temperature"] = reference
 
         return anomalies
 
