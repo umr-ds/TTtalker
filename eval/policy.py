@@ -27,6 +27,7 @@ SLEEP_TIME_MIN = 300
 SLEEP_TIME_DEFAULT = 600
 TIME_SLOT_LENGTH = 60
 CRITICAL_TEMPERATURE = 50
+POSITION_THRESHOLD = 227
 ANALYSIS_TIME_SHORT = 172800  # 2 days
 ANALYSIS_TIME_LONG = 604800  # 7 days
 UPLOAD_DATABASE = "historical"
@@ -65,9 +66,9 @@ class DataPolicy:
         )
 
         anomaly = (
-            abs(x - mean_x) > (stdev_x * CONFIDENCE)
-            or abs(y - mean_y) > (stdev_y * CONFIDENCE)
-            or abs(z - mean_z) > (stdev_z * CONFIDENCE)
+            abs(x - mean_x) > POSITION_THRESHOLD
+            or abs(y - mean_y) > POSITION_THRESHOLD
+            or abs(z - mean_z) > POSITION_THRESHOLD
         )
 
         reference = {

@@ -195,8 +195,8 @@ if __name__ == "__main__":
         light_policy = policy.LightPolicy(influx_client=influx_client)
 
         logging.info("Starting search for anomalies")
-        with open("anomalies.jsonl", mode="a") as fa, open(
-            "critical.jsonl", mode="a"
+        with open("anomalies.jsonl", mode="w") as fa, open(
+            "critical.jsonl", mode="w"
         ) as fc:
             for timestamp, packet in tqdm(tt_packets):
                 if timestamp > aggregation_time + ANALYSIS_WINDOW:
@@ -247,7 +247,6 @@ if __name__ == "__main__":
                             fc,
                         )
                         fc.write("\n")
-                        continue
 
                     anomalies = data_policy.check_anomaly(
                         packet=packet, packet_time=timestamp
@@ -263,7 +262,6 @@ if __name__ == "__main__":
                             fa,
                         )
                         fa.write("\n")
-                        continue
 
     influx_client.close()
     logging.info("Done")
