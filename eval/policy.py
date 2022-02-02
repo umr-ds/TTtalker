@@ -27,7 +27,8 @@ SLEEP_TIME_MIN = 300
 SLEEP_TIME_DEFAULT = 600
 TIME_SLOT_LENGTH = 60
 CRITICAL_TEMPERATURE = 50
-ANALYSIS_TIME = 172800  # 2 days
+ANALYSIS_TIME_SHORT = 172800  # 2 days
+ANALYSIS_TIME_LONG = 604800  # 7 days
 UPLOAD_DATABASE = "historical"
 
 
@@ -35,8 +36,10 @@ UPLOAD_DATABASE = "historical"
 class DataPolicy:
     influx_client: influx.InfluxDBClient
     ttcloud: str
-    aggregated_movement: Dict[str, float]
-    aggregated_temperature: Dict[str, float]
+    aggregated_movement_short: Dict[str, float]
+    aggregated_temperature_short: Dict[str, float]
+    aggregated_movement_long: Dict[str, float]
+    aggregated_temperature_long: Dict[str, float]
 
     def _evaluate_position(
         self, packet: DataPacketRev32, means: Dict[str, List[int]]
@@ -80,8 +83,10 @@ class DataPolicy:
 
         return anomaly, reference
 
-    def _evaluate_movement(self, packet: DataPacketRev32) -> Tuple[bool, Dict[str, float]]:
-        if not self.aggregated_movement:
+    def _evaluate_movement(
+        self, packet: DataPacketRev32, aggregated_movement: Dict[str, float]
+    ) -> Tuple[bool, Dict[str, float]]:
+        if not aggregated_movement:
             logging.info("Haven't received any aggregated movement data yet.")
             return False, {}
 
@@ -90,30 +95,34 @@ class DataPolicy:
         z = packet.gravity_z_derivation
 
         logging.debug(
-            f"Movement data: [x: {x}, y: {y}, z: {z}, aggregate: {self.aggregated_movement}]"
+            f"Movement data: [x: {x}, y: {y}, z: {z}, aggregate: {aggregated_movement}]"
         )
 
         anomaly = (
-            abs(x - self.aggregated_movement["mean_x"])
-            > (self.aggregated_movement["stdev_x"] * CONFIDENCE)
-            or abs(y - self.aggregated_movement["mean_y"])
-            > (self.aggregated_movement["stdev_y"] * CONFIDENCE)
-            or abs(z - self.aggregated_movement["mean_z"])
-            > (self.aggregated_movement["stdev_z"] * CONFIDENCE)
+            abs(x - aggregated_movement["mean_x"])
+            > (aggregated_movement["stdev_x"] * CONFIDENCE)
+            or abs(y - aggregated_movement["mean_y"])
+            > (aggregated_movement["stdev_y"] * CONFIDENCE)
+            or abs(z - aggregated_movement["mean_z"])
+            > (aggregated_movement["stdev_z"] * CONFIDENCE)
         )
 
         logging.debug(f"Detected movement anomaly: {anomaly}")
 
-        return anomaly, self.aggregated_movement
+        return anomaly, aggregated_movement
 
     def _evaluate_gravity(
-        self, packet: Union[DataPacketRev31, DataPacketRev32], packet_time: int
+        self,
+        packet: Union[DataPacketRev31, DataPacketRev32],
+        packet_time: int,
+        analysis_time: int,
+        aggregated_movement: Dict[str, float],
     ) -> Tuple[bool, Dict[str, Tuple[bool, Dict[str, float]]]]:
         means: Dict[str, List[int]] = defaultdict(list)
 
         ttcloud_database = f"{UPLOAD_DATABASE}-{self.ttcloud}"
         self.influx_client.switch_database(ttcloud_database)
-        t_start = packet_time - ANALYSIS_TIME
+        t_start = packet_time - analysis_time
 
         try:
             data: ResultSet = self.influx_client.query(
@@ -137,7 +146,9 @@ class DataPolicy:
             packet=packet, means=means
         )
         r_data["position"] = (anomaly_position, reference)
-        anomaly_movement, reference = self._evaluate_movement(packet=packet)
+        anomaly_movement, reference = self._evaluate_movement(
+            packet=packet, aggregated_movement=aggregated_movement
+        )
         r_data["movement"] = (anomaly_movement, reference)
         anomaly = anomaly_position or anomaly_movement
 
@@ -147,24 +158,32 @@ class DataPolicy:
 
     def _evaluate_air_temperature(
         self, packet: Union[DataPacketRev31, DataPacketRev32]
-    ) -> Tuple[bool, int]:
+    ) -> Tuple[bool, Dict[str, int]]:
         anomaly = packet.air_temperature >= CRITICAL_TEMPERATURE * 10
         logging.debug(f"Found air temperature anomaly: {anomaly}")
-        return anomaly, CRITICAL_TEMPERATURE * 10
+        reference: Dict[str, int] = {
+            "measured": packet.air_temperature,
+            "threshold": CRITICAL_TEMPERATURE * 10,
+        }
+        return anomaly, reference
 
     def _evaluate_stem_temperature(
-        self, packet: Union[DataPacketRev31, DataPacketRev32], packet_time: int
+        self,
+        packet: Union[DataPacketRev31, DataPacketRev32],
+        packet_time: int,
+        analysis_time: int,
+        aggregated_temperature: Dict[str, float],
     ) -> Tuple[bool, Dict[str, Union[float, Dict[str, float]]]]:
         logging.debug("Evaluating stem temperature")
-        if not self.aggregated_temperature:
+        if not aggregated_temperature:
             logging.info("Haven't received any aggregated temperature data yet.")
             return False, {}
         else:
-            logging.debug(f"Aggregated temperature data: {self.aggregated_temperature}")
+            logging.debug(f"Aggregated temperature data: {aggregated_temperature}")
 
         ttcloud_database = f"{UPLOAD_DATABASE}-{self.ttcloud}"
         self.influx_client.switch_database(ttcloud_database)
-        t_start = packet_time - ANALYSIS_TIME
+        t_start = packet_time - analysis_time
 
         temperature_reference_cold = compute_temperature(
             packet.temperature_reference_cold
@@ -224,9 +243,9 @@ class DataPolicy:
         mean_delta_hot = mean(deltas_hot)
 
         anomaly = abs(delta_cold - mean_delta_cold) > (
-            self.aggregated_temperature["stdev_delta_cold"] * CONFIDENCE
+            aggregated_temperature["stdev_delta_cold"] * CONFIDENCE
         ) or abs(delta_hot - mean_delta_hot) > (
-            self.aggregated_temperature["stdev_delta_hot"] * CONFIDENCE
+            aggregated_temperature["stdev_delta_hot"] * CONFIDENCE
         )
 
         r_data: Dict[str, Union[float, Dict[str, float]]] = {
@@ -234,36 +253,75 @@ class DataPolicy:
             "delta_hot": delta_hot,
             "mean_delta_cold": mean_delta_cold,
             "mean_delta_hot": mean_delta_hot,
-            "aggregated": self.aggregated_temperature
+            "aggregated": aggregated_temperature,
         }
 
         logging.debug(f"Detected temperature anomaly: {anomaly}")
 
         return anomaly, r_data
 
-    def evaluate(
+    def check_anomaly(
         self, packet: Union[DataPacketRev31, DataPacketRev32], packet_time: int
     ) -> Dict[str, Any]:
         anomalies: Dict[str, Any] = {}
 
         logging.debug(f"Checking gravity data")
-        gravity_anomaly, reference = self._evaluate_gravity(packet=packet, packet_time=packet_time)
+        gravity_anomaly, reference = self._evaluate_gravity(
+            packet=packet,
+            packet_time=packet_time,
+            analysis_time=ANALYSIS_TIME_SHORT,
+            aggregated_movement=self.aggregated_movement_short,
+        )
         if gravity_anomaly:
             logging.debug("Detected gravity anomaly")
             anomalies["gravity"] = reference
 
         logging.debug(f"Checking stem temperature")
         stem_temperature_anomaly, reference = self._evaluate_stem_temperature(
-            packet=packet, packet_time=packet_time
+            packet=packet,
+            packet_time=packet_time,
+            analysis_time=ANALYSIS_TIME_SHORT,
+            aggregated_temperature=self.aggregated_temperature_short,
         )
         if stem_temperature_anomaly:
             logging.debug("Detected stem temperature anomaly")
             anomalies["stem temperature"] = reference
 
+        return anomalies
+
+    def check_critical(
+        self, packet: Union[DataPacketRev31, DataPacketRev32], packet_time: int
+    ) -> Dict[str, Any]:
+        anomalies: Dict[str, Any] = {}
+
+        logging.debug(f"Checking gravity data")
+        gravity_anomaly, reference = self._evaluate_gravity(
+            packet=packet,
+            packet_time=packet_time,
+            analysis_time=ANALYSIS_TIME_LONG,
+            aggregated_movement=self.aggregated_movement_long,
+        )
+        if gravity_anomaly:
+            logging.debug("Detected critical gravity anomaly")
+            anomalies["gravity"] = reference
+
+        logging.debug(f"Checking stem temperature")
+        stem_temperature_anomaly, reference = self._evaluate_stem_temperature(
+            packet=packet,
+            packet_time=packet_time,
+            analysis_time=ANALYSIS_TIME_LONG,
+            aggregated_temperature=self.aggregated_temperature_long,
+        )
+        if stem_temperature_anomaly:
+            logging.debug("Detected critical stem temperature anomaly")
+            anomalies["stem temperature"] = reference
+
         logging.debug(f"Checking air temperature")
-        air_temperature_anomaly, reference = self._evaluate_air_temperature(packet=packet)
+        air_temperature_anomaly, reference = self._evaluate_air_temperature(
+            packet=packet
+        )
         if air_temperature_anomaly:
-            logging.debug("Detected air temperature anomaly")
+            logging.debug("Detected critical air temperature anomaly")
             anomalies["air temperature"] = reference
 
         return anomalies

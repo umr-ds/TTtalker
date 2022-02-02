@@ -12,13 +12,14 @@ from influxdb.resultset import ResultSet
 from tqdm import tqdm
 from json import dump
 
-ANALYSIS_TIME = 172800  # 2 days
-ANALYSIS_WINDOW = 3600  # 1 hour
+ANALYSIS_TIME_SHORT = 172800  # 2 days
+ANALYSIS_TIME_LONG = 604800  # 7 days
+ANALYSIS_WINDOW = 250  # 5 minutes
 UPLOAD_DATABASE = "historical"
 
 
 def aggregate_movement(
-    influx_client: influx.InfluxDBClient, packet_time: int
+    influx_client: influx.InfluxDBClient, packet_time: int, analysis_time: int
 ) -> Dict[str, float]:
     logging.debug("Aggregating movement data")
     influx_client.switch_database(UPLOAD_DATABASE)
@@ -27,7 +28,7 @@ def aggregate_movement(
     y_derivs: List[int] = []
     z_derivs: List[int] = []
 
-    t_start = packet_time - ANALYSIS_TIME
+    t_start = packet_time - analysis_time
 
     try:
         data: ResultSet = influx_client.query(
@@ -70,12 +71,12 @@ def aggregate_movement(
 
 
 def aggregate_temperature(
-    influx_client: influx.InfluxDBClient, packet_time: int
+    influx_client: influx.InfluxDBClient, packet_time: int, analysis_time: int
 ) -> Dict[str, float]:
     logging.debug("Aggregating temperature data")
     influx_client.switch_database(UPLOAD_DATABASE)
 
-    t_start = packet_time - ANALYSIS_TIME
+    t_start = packet_time - analysis_time
 
     try:
         data: ResultSet = influx_client.query(
@@ -161,55 +162,108 @@ if __name__ == "__main__":
     for ttcloud, tt_packets in all_packets:
         logging.debug("Getting initial aggregated data")
         aggregation_time = tt_packets[0][0]
-        aggregated_movement = aggregate_movement(
-            influx_client=influx_client, packet_time=aggregation_time
+        aggregated_movement_short = aggregate_movement(
+            influx_client=influx_client,
+            packet_time=aggregation_time,
+            analysis_time=ANALYSIS_TIME_SHORT,
         )
-        aggregated_temperature = aggregate_temperature(
-            influx_client=influx_client, packet_time=aggregation_time
+        aggregated_movement_long = aggregate_movement(
+            influx_client=influx_client,
+            packet_time=aggregation_time,
+            analysis_time=ANALYSIS_TIME_LONG,
+        )
+        aggregated_temperature_short = aggregate_temperature(
+            influx_client=influx_client,
+            packet_time=aggregation_time,
+            analysis_time=ANALYSIS_TIME_SHORT,
+        )
+        aggregated_temperature_long = aggregate_temperature(
+            influx_client=influx_client,
+            packet_time=aggregation_time,
+            analysis_time=ANALYSIS_TIME_LONG,
         )
 
         data_policy = policy.DataPolicy(
             influx_client=influx_client,
             ttcloud=ttcloud,
-            aggregated_movement=aggregated_movement,
-            aggregated_temperature=aggregated_temperature,
+            aggregated_movement_short=aggregated_movement_short,
+            aggregated_movement_long=aggregated_movement_long,
+            aggregated_temperature_short=aggregated_temperature_short,
+            aggregated_temperature_long=aggregated_temperature_long,
         )
 
         light_policy = policy.LightPolicy(influx_client=influx_client)
 
         logging.info("Starting search for anomalies")
-        with open("anomalies.jsonl", mode="a") as f:
+        with open("anomalies.jsonl", mode="a") as fa, open(
+            "critical.jsonl", mode="a"
+        ) as fc:
             for timestamp, packet in tqdm(tt_packets):
                 if timestamp > aggregation_time + ANALYSIS_WINDOW:
                     aggregation_time = timestamp
-                    aggregated_movement = aggregate_movement(
-                        influx_client=influx_client, packet_time=aggregation_time
+                    aggregated_movement_short = aggregate_movement(
+                        influx_client=influx_client,
+                        packet_time=aggregation_time,
+                        analysis_time=ANALYSIS_TIME_SHORT,
                     )
-                    aggregated_temperature = aggregate_temperature(
-                        influx_client=influx_client, packet_time=aggregation_time
+                    aggregated_movement_long = aggregate_movement(
+                        influx_client=influx_client,
+                        packet_time=aggregation_time,
+                        analysis_time=ANALYSIS_TIME_LONG,
                     )
-                    data_policy.aggregated_movement = aggregated_movement
-                    data_policy.aggregated_temperature = aggregated_temperature
+                    aggregated_temperature_short = aggregate_temperature(
+                        influx_client=influx_client,
+                        packet_time=aggregation_time,
+                        analysis_time=ANALYSIS_TIME_SHORT,
+                    )
+                    aggregated_temperature_long = aggregate_temperature(
+                        influx_client=influx_client,
+                        packet_time=aggregation_time,
+                        analysis_time=ANALYSIS_TIME_LONG,
+                    )
+                    data_policy.aggregated_movement_short = aggregated_movement_short
+                    data_policy.aggregated_movement_long = aggregated_movement_long
+                    data_policy.aggregated_temperature_short = (
+                        aggregated_temperature_short
+                    )
+                    data_policy.aggregated_temperature_long = (
+                        aggregated_temperature_long
+                    )
 
                 if isinstance(packet, packets.DataPacketRev31) or isinstance(
                     packet, packets.DataPacketRev32
                 ):
-                    anomalies = data_policy.evaluate(
+                    critical = data_policy.check_critical(
                         packet=packet, packet_time=timestamp
                     )
-                else:
-                    anomalies = {}
-                if anomalies:
-                    logging.debug("Anomaly found!")
-                    dump(
-                        {
-                            "packet": packet.to_influx_json(),
-                            "timestamp": timestamp,
-                            "anomalies": anomalies,
-                        },
-                        f,
+                    if critical:
+                        logging.debug("Critical event found!")
+                        dump(
+                            {
+                                "packet": packet.to_influx_json(),
+                                "timestamp": timestamp,
+                                "events": critical,
+                            },
+                            fc,
+                        )
+                        fc.write("\n")
+                        continue
+
+                    anomalies = data_policy.check_anomaly(
+                        packet=packet, packet_time=timestamp
                     )
-                    f.write("\n")
+                    if anomalies:
+                        logging.debug("Anomaly found!")
+                        dump(
+                            {
+                                "packet": packet.to_influx_json(),
+                                "timestamp": timestamp,
+                                "events": anomalies,
+                            },
+                            fa,
+                        )
+                        fa.write("\n")
+                        continue
 
     influx_client.close()
     logging.info("Done")
