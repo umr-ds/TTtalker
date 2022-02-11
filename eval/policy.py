@@ -21,7 +21,8 @@ from ttt.util import (
 )
 
 RDE = 1
-CONFIDENCE = 3
+CONFIDENCE_ANOMALY = 3
+CONFIDENCE_CRITICAL = 5
 ANALYSIS_INTERVAL = "2d"
 SLEEP_TIME_MIN = 300
 SLEEP_TIME_DEFAULT = 600
@@ -85,7 +86,10 @@ class DataPolicy:
         return anomaly, reference
 
     def _evaluate_movement(
-        self, packet: DataPacketRev32, aggregated_movement: Dict[str, float]
+        self,
+        packet: DataPacketRev32,
+        aggregated_movement: Dict[str, float],
+        confidence: int,
     ) -> Tuple[bool, Dict[str, float]]:
         if not aggregated_movement:
             logging.info("Haven't received any aggregated movement data yet.")
@@ -101,11 +105,11 @@ class DataPolicy:
 
         anomaly = (
             abs(x - aggregated_movement["mean_x"])
-            > (aggregated_movement["stdev_x"] * CONFIDENCE)
+            > (aggregated_movement["stdev_x"] * confidence)
             or abs(y - aggregated_movement["mean_y"])
-            > (aggregated_movement["stdev_y"] * CONFIDENCE)
+            > (aggregated_movement["stdev_y"] * confidence)
             or abs(z - aggregated_movement["mean_z"])
-            > (aggregated_movement["stdev_z"] * CONFIDENCE)
+            > (aggregated_movement["stdev_z"] * confidence)
         )
 
         logging.debug(f"Detected movement anomaly: {anomaly}")
@@ -118,6 +122,7 @@ class DataPolicy:
         packet_time: int,
         analysis_time: int,
         aggregated_movement: Dict[str, float],
+        confidence: int,
     ) -> Tuple[bool, Dict[str, Tuple[bool, Dict[str, float]]]]:
         means: Dict[str, List[int]] = defaultdict(list)
 
@@ -148,7 +153,9 @@ class DataPolicy:
         )
         r_data["position"] = (anomaly_position, reference)
         anomaly_movement, reference = self._evaluate_movement(
-            packet=packet, aggregated_movement=aggregated_movement
+            packet=packet,
+            aggregated_movement=aggregated_movement,
+            confidence=confidence,
         )
         r_data["movement"] = (anomaly_movement, reference)
         anomaly = anomaly_position or anomaly_movement
@@ -174,6 +181,7 @@ class DataPolicy:
         packet_time: int,
         analysis_time: int,
         aggregated_temperature: Dict[str, float],
+        confidence: int,
     ) -> Tuple[bool, Dict[str, Union[float, Dict[str, float]]]]:
         logging.debug("Evaluating stem temperature")
         if not aggregated_temperature:
@@ -244,9 +252,9 @@ class DataPolicy:
         mean_delta_hot = mean(deltas_hot)
 
         anomaly = abs(delta_cold - mean_delta_cold) > (
-            aggregated_temperature["stdev_delta_cold"] * CONFIDENCE
+            aggregated_temperature["stdev_delta_cold"] * confidence
         ) or abs(delta_hot - mean_delta_hot) > (
-            aggregated_temperature["stdev_delta_hot"] * CONFIDENCE
+            aggregated_temperature["stdev_delta_hot"] * confidence
         )
 
         r_data: Dict[str, Union[float, Dict[str, float]]] = {
@@ -272,6 +280,7 @@ class DataPolicy:
             packet_time=packet_time,
             analysis_time=ANALYSIS_TIME_SHORT,
             aggregated_movement=self.aggregated_movement_short,
+            confidence=CONFIDENCE_ANOMALY,
         )
         if gravity_anomaly:
             logging.debug("Detected gravity anomaly")
@@ -283,6 +292,7 @@ class DataPolicy:
             packet_time=packet_time,
             analysis_time=ANALYSIS_TIME_SHORT,
             aggregated_temperature=self.aggregated_temperature_short,
+            confidence=CONFIDENCE_ANOMALY,
         )
         if stem_temperature_anomaly:
             logging.debug("Detected stem temperature anomaly")
@@ -301,6 +311,7 @@ class DataPolicy:
             packet_time=packet_time,
             analysis_time=ANALYSIS_TIME_LONG,
             aggregated_movement=self.aggregated_movement_long,
+            confidence=CONFIDENCE_CRITICAL,
         )
         if gravity_anomaly:
             logging.debug("Detected critical gravity anomaly")
@@ -312,6 +323,7 @@ class DataPolicy:
             packet_time=packet_time,
             analysis_time=ANALYSIS_TIME_LONG,
             aggregated_temperature=self.aggregated_temperature_long,
+            confidence=CONFIDENCE_CRITICAL,
         )
         if stem_temperature_anomaly:
             logging.debug("Detected critical stem temperature anomaly")
@@ -387,8 +399,10 @@ class LightPolicy:
         # max_dev_bluevalues = max(abs(el - mean_bluevalues) for el in bluevalues)
 
         return abs(cur_bluevalue - mean_bluevalues) > (
-            stdev(bluevalues) * CONFIDENCE
-        ) or abs(cur_redvalue - mean_redvalues) > (stdev(redvalues) * CONFIDENCE)
+            stdev(bluevalues) * CONFIDENCE_ANOMALY
+        ) or abs(cur_redvalue - mean_redvalues) > (
+            stdev(redvalues) * CONFIDENCE_ANOMALY
+        )
 
     def evaluate(self, packet: LightSensorPacket) -> TTCommand2:
         return TTCommand2(
